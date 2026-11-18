@@ -1,0 +1,319 @@
+import { useRef, useState } from 'react'
+import { AlertTriangle, BellOff, ChevronDown, ChevronRight, CircleHelp, Compass, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Search, ServerCrash, ShieldAlert, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
+import { NOTIFS } from '../lib/data'
+import { Button, cx, Dialog, EmptyState, Field, inputCls, Toggle, useToast } from '../lib/ui'
+import { useApp } from './ctx'
+import { Screen, TopBar } from './shell'
+
+export function NotificationsScreen() {
+  const { setUnread, go } = useApp()
+  const toast = useToast()
+  const [items, setItems] = useState(NOTIFS)
+  const [tab, setTab] = useState<'all' | 'unread'>('all')
+  const list = tab === 'all' ? items : items.filter((n) => n.unread)
+  const sync = (next: typeof items) => {
+    setItems(next)
+    setUnread(next.filter((n) => n.unread).length)
+  }
+  return (
+    <Screen
+      header={
+        <>
+          <TopBar
+            title="Notifikasi"
+            right={
+              <Button variant="ghost" size="sm" disabled={!items.some((n) => n.unread)} onClick={() => (sync(items.map((n) => ({ ...n, unread: false }))), toast('Semua notifikasi ditandai dibaca.'))}>
+                Tandai Semua Dibaca
+              </Button>
+            }
+          />
+          <div className="shrink-0 border-b border-line bg-white px-5 pb-3">
+            <div role="tablist" className="grid grid-cols-2 gap-1 rounded-full bg-tint p-1">
+              {(
+                [
+                  ['all', 'Semua'],
+                  ['unread', `Belum Dibaca (${items.filter((n) => n.unread).length})`],
+                ] as const
+              ).map(([k, l]) => (
+                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cx('h-10 rounded-full text-[13px] font-bold', tab === k ? 'bg-primary text-white' : 'text-primary')}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2 p-5">
+        {list.length === 0 && (
+          <div className="rounded-[20px] border border-line bg-white">
+            <EmptyState icon={BellOff} title="Belum ada notifikasi." body="Kabar terbaru tentang laporan Anda akan muncul di sini." />
+          </div>
+        )}
+        {list.map((n) => (
+          <SwipeRow key={n.id} onDelete={() => (sync(items.filter((x) => x.id !== n.id)), toast('Notifikasi dihapus.', { tone: 'info' }))}>
+            <button
+              onClick={() => {
+                sync(items.map((x) => (x.id === n.id ? { ...x, unread: false } : x)))
+                if (n.body.includes('042')) go('tracking', { id: 'LPR-2026-042' })
+              }}
+              className={cx('flex w-full items-start gap-3 rounded-[20px] border p-4 text-left', n.unread ? 'border-primary/40 bg-white' : 'border-line bg-white/70')}
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-primary">
+                <BellRing className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="flex-1 text-sm font-bold text-ink">{n.title}</span>
+                  {n.unread && <span className="size-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
+                </span>
+                <span className="mt-0.5 block text-xs leading-5 text-muted">{n.body}</span>
+                <span className="mt-1 flex items-center gap-1 text-[11px] text-soft">
+                  <Clock className="size-3" aria-hidden /> {n.t}
+                </span>
+              </span>
+            </button>
+          </SwipeRow>
+        ))}
+        {list.length > 0 && <p className="text-center text-xs text-muted">Geser ke kiri untuk menghapus.</p>}
+      </div>
+    </Screen>
+  )
+}
+
+function SwipeRow({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  const [dx, setDx] = useState(0)
+  const start = useRef<number | null>(null)
+  return (
+    <div className="relative overflow-hidden rounded-[20px]">
+      <button onClick={onDelete} aria-label="Hapus notifikasi" className="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-danger text-white">
+        <Trash2 className="size-5" aria-hidden />
+      </button>
+      <div
+        className="relative bg-canvas transition-transform"
+        style={{ transform: `translateX(${dx}px)` }}
+        onPointerDown={(e) => (start.current = e.clientX)}
+        onPointerMove={(e) => start.current !== null && setDx(Math.min(0, Math.max(-80, e.clientX - start.current + (dx === -80 ? -80 : 0))))}
+        onPointerUp={() => {
+          start.current = null
+          setDx((d) => (d < -40 ? -80 : 0))
+        }}
+        onPointerLeave={() => {
+          if (start.current === null) return
+          start.current = null
+          setDx((d) => (d < -40 ? -80 : 0))
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+export function ProfileScreen() {
+  const { user, logout, go, expireSession } = useApp()
+  const toast = useToast()
+  const [notif, setNotif] = useState({ wa: true, email: true, push: false })
+  const [section, setSection] = useState<string | null>(null)
+  const [del, setDel] = useState<0 | 1 | 2>(0)
+  const [confirmText, setConfirmText] = useState('')
+  const rows: { k: string; l: string; icon: typeof User; danger?: boolean; run?: () => void }[] = [
+    { k: 'data', l: 'Data Diri', icon: User },
+    { k: 'pw', l: 'Ubah Kata Sandi', icon: KeyRound },
+    { k: 'notif', l: 'Pengaturan Notifikasi', icon: BellRing },
+    { k: 'addr', l: 'Alamat Tersimpan', icon: MapPin },
+    { k: 'trx', l: 'Riwayat Transaksi', icon: History },
+    { k: 'help', l: 'Bantuan', icon: CircleHelp, run: () => go('help') },
+    { k: 'privacy', l: 'Kebijakan Privasi', icon: FileLock2 },
+    { k: 'sys', l: 'Halaman Sistem (404/403/500)', icon: Compass, run: () => go('system', { kind: '404' }) },
+    { k: 'del', l: 'Hapus Akun', icon: Trash2, danger: true, run: () => setDel(1) },
+  ]
+  return (
+    <Screen>
+      <header className="bg-primary px-5 pb-6 pt-5 text-white">
+        <h1 className="text-[22px] font-bold">Profil</h1>
+        <div className="mt-4 flex items-center gap-3">
+          <span className="flex size-14 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">MR</span>
+          <div>
+            <p className="text-base font-bold">{user?.full}</p>
+            <p className="text-xs text-white/80">{user?.contact}</p>
+          </div>
+        </div>
+      </header>
+      <div className="flex flex-col gap-3 p-5">
+        <ul className="overflow-hidden rounded-[20px] border border-line bg-white">
+          {rows.map((r, i) => (
+            <li key={r.k} className={cx(i > 0 && 'border-t border-line')}>
+              <button onClick={() => (r.run ? r.run() : setSection(section === r.k ? null : r.k))} aria-expanded={!r.run ? section === r.k : undefined} className={cx('flex min-h-14 w-full items-center gap-3 px-4 text-left text-sm font-semibold hover:bg-tint/50', r.danger ? 'text-danger' : 'text-ink')}>
+                <r.icon className={cx('size-5', r.danger ? 'text-danger' : 'text-primary')} aria-hidden />
+                <span className="flex-1">{r.l}</span>
+                {r.run ? <ChevronRight className="size-4 text-soft" aria-hidden /> : <ChevronDown className={cx('size-4 text-soft transition-transform', section === r.k && 'rotate-180')} aria-hidden />}
+              </button>
+              {section === r.k && (
+                <div className="lf-fade border-t border-line bg-[#fafcfd] px-4 py-3 text-sm text-muted">
+                  {r.k === 'notif' && (
+                    <div className="flex flex-col">
+                      <Toggle checked={notif.wa} onChange={(v) => setNotif({ ...notif, wa: v })} label="WhatsApp" />
+                      <Toggle checked={notif.email} onChange={(v) => setNotif({ ...notif, email: v })} label="Email" />
+                      <Toggle checked={notif.push} onChange={(v) => setNotif({ ...notif, push: v })} label="Push Notifikasi" />
+                    </div>
+                  )}
+                  {r.k === 'data' && (
+                    <dl className="grid grid-cols-[90px_1fr] gap-y-1.5 text-[13px]">
+                      <dt>Nama</dt>
+                      <dd className="font-semibold text-ink">{user?.full}</dd>
+                      <dt>Kontak</dt>
+                      <dd className="font-semibold text-ink">{user?.contact}</dd>
+                      <dt>NIK</dt>
+                      <dd className="font-semibold text-ink">3201************</dd>
+                    </dl>
+                  )}
+                  {r.k === 'pw' && (
+                    <div className="flex flex-col gap-3">
+                      <Field label="Kata Sandi Lama">{(a) => <input {...a} type="password" className={inputCls() + ' h-11'} />}</Field>
+                      <Field label="Kata Sandi Baru" helper="Minimal 8 karakter, kombinasi huruf dan angka.">{(a) => <input {...a} type="password" className={inputCls() + ' h-11'} />}</Field>
+                      <Button size="sm" onClick={() => (toast('Kata sandi diperbarui.'), setSection(null))}>
+                        Simpan Kata Sandi
+                      </Button>
+                    </div>
+                  )}
+                  {r.k === 'addr' && <p className="text-[13px]"><b className="text-ink">Rumah</b> • Jl. Pajajaran No. 21, Bogor Tengah, 16143</p>}
+                  {r.k === 'trx' && <p className="text-[13px]"><b className="text-ink">Rp 25.500</b> • Ongkir #LPR-2026-042 • Lunas (simulasi)</p>}
+                  {r.k === 'privacy' && <p className="text-[13px] leading-5">Data pribadi diproses sesuai UU No. 27/2022 tentang Pelindungan Data Pribadi. Foto KTP dihapus otomatis setelah proses klaim selesai; NIK selalu disamarkan.</p>}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        <button onClick={expireSession} className="min-h-10 rounded-xl border border-dashed border-[#b9c7d0] text-[11px] font-semibold text-muted hover:bg-white">
+          Simulasi: sesi berakhir
+        </button>
+        <Button variant="outline" size="lg" full icon={LogOut} onClick={logout}>
+          Keluar
+        </Button>
+      </div>
+      <Dialog
+        open={del === 1}
+        onClose={() => setDel(0)}
+        icon={AlertTriangle}
+        tone="danger"
+        title="Hapus akun Anda?"
+        actions={
+          <>
+            <Button variant="danger" full onClick={() => setDel(2)}>
+              Lanjutkan
+            </Button>
+            <Button variant="ghost" full onClick={() => setDel(0)}>
+              Batal
+            </Button>
+          </>
+        }
+      >
+        Seluruh laporan aktif akan dibatalkan dan data pribadi dihapus dalam 30 hari. BAST yang sudah terbit tetap tersimpan untuk keperluan audit.
+      </Dialog>
+      <Dialog
+        open={del === 2}
+        onClose={() => setDel(0)}
+        title="Konfirmasi terakhir"
+        actions={
+          <>
+            <Button variant="danger" full disabled={confirmText !== 'HAPUS'} onClick={() => (setDel(0), logout())}>
+              Hapus Akun Permanen
+            </Button>
+            <Button variant="ghost" full onClick={() => setDel(0)}>
+              Batal
+            </Button>
+          </>
+        }
+      >
+        <Field label='Ketik "HAPUS" untuk mengonfirmasi'>{(a) => <input {...a} value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className={inputCls() + ' h-11'} />}</Field>
+      </Dialog>
+    </Screen>
+  )
+}
+
+const FAQ = [
+  ['Berapa lama barang disimpan?', 'Barang Elektronik dan Non Elektronik disimpan 30 hari, sedangkan Uang Tunai disimpan 90 hari.'],
+  ['Mengapa foto barang tidak ditampilkan?', 'Untuk mencegah klaim palsu. Anda membuktikan kepemilikan dengan menyebutkan ciri rahasia yang hanya diketahui pemilik.'],
+  ['Apakah saya harus login untuk melapor?', 'Tidak. Anda bisa mengisi laporan sebagai tamu. Login hanya diperlukan saat mengirim agar laporan bisa dilacak.'],
+  ['Bisakah barang dikirim ke rumah?', 'Bisa untuk kategori Elektronik dan Non Elektronik dengan ongkos kirim. Uang Tunai wajib diambil langsung di stasiun.'],
+  ['Bagaimana jika klaim saya ditolak?', 'Anda dapat mengajukan ulang hingga 2 kali dengan bukti tambahan. Setelah itu, silakan datang langsung ke Posko CS.'],
+]
+
+export function HelpScreen() {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState<number | null>(0)
+  const toast = useToast()
+  const list = FAQ.filter(([t, d]) => (t + d).toLowerCase().includes(q.toLowerCase()))
+  return (
+    <Screen
+      header={<TopBar title="Bantuan" />}
+      footer={
+        <Button variant="cta" size="lg" full icon={MessageCircle} onClick={() => toast('Membuka WhatsApp CS KAI Commuter...', { tone: 'info' })}>
+          Hubungi CS via WhatsApp
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3 p-5">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-3.5 size-5 text-soft" aria-hidden />
+          <label htmlFor="faq-q" className="sr-only">
+            Cari bantuan
+          </label>
+          <input id="faq-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari pertanyaan..." className={inputCls() + ' h-12 bg-white pl-11'} />
+        </div>
+        <ul className="overflow-hidden rounded-[20px] border border-line bg-white">
+          {list.map(([t, d], i) => (
+            <li key={t} className={cx(i > 0 && 'border-t border-line')}>
+              <button aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)} className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-sm font-bold text-ink">
+                <span className="flex-1">{t}</span>
+                <ChevronDown className={cx('size-4 text-soft transition-transform', open === i && 'rotate-180')} aria-hidden />
+              </button>
+              {open === i && <p className="px-4 pb-4 text-[13px] leading-5 text-muted">{d}</p>}
+            </li>
+          ))}
+          {list.length === 0 && <EmptyState icon={Search} title="Pertanyaan tidak ditemukan." body="Coba kata kunci lain atau hubungi CS." />}
+        </ul>
+      </div>
+    </Screen>
+  )
+}
+
+const SYS = {
+  '404': { icon: Compass, title: 'Halaman tidak ditemukan', body: 'Tautan mungkin sudah tidak berlaku atau alamatnya keliru.' },
+  '403': { icon: ShieldAlert, title: 'Akses dibatasi', body: 'Anda tidak memiliki akses ke halaman ini.' },
+  '500': { icon: ServerCrash, title: 'Terjadi gangguan', body: 'Terjadi gangguan. Coba lagi sebentar lagi.' },
+  maint: { icon: Wrench, title: 'Sedang pemeliharaan', body: 'Sistem sedang dalam pemeliharaan. Kembali pukul 02:00 WIB.' },
+} as const
+
+export function SystemScreen({ kind: initial = '404' }: { kind?: keyof typeof SYS }) {
+  const { tab } = useApp()
+  const [kind, setKind] = useState<keyof typeof SYS>(initial)
+  const s = SYS[kind]
+  return (
+    <Screen header={<TopBar title="Halaman Sistem" />}>
+      <div className="flex flex-col gap-4 p-5">
+        <div className="flex gap-2">
+          {(Object.keys(SYS) as (keyof typeof SYS)[]).map((k) => (
+            <button key={k} onClick={() => setKind(k)} className={cx('h-9 rounded-full px-3 text-xs font-bold', kind === k ? 'bg-ink text-white' : 'bg-white text-muted')}>
+              {k === 'maint' ? 'Pemeliharaan' : k}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-3 rounded-[24px] border border-line bg-white px-6 py-12 text-center">
+          {kind !== 'maint' && <p className="text-5xl font-extrabold tracking-tight text-tint [-webkit-text-stroke:2px_#318FB5]">{kind}</p>}
+          <span className="flex size-16 items-center justify-center rounded-3xl bg-tint text-primary">
+            <s.icon className="size-8" aria-hidden />
+          </span>
+          <h2 className="text-lg font-bold text-ink">{s.title}</h2>
+          <p className="max-w-64 text-sm text-muted">{s.body}</p>
+          {kind !== 'maint' && (
+            <Button variant="cta" className="mt-2" onClick={() => tab('home')}>
+              Kembali ke Beranda
+            </Button>
+          )}
+        </div>
+      </div>
+    </Screen>
+  )
+}

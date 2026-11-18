@@ -1,0 +1,188 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\BarangTemuan;
+use App\Models\BastPengambilan;
+use App\Models\RiwayatLaporan;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+class StaffLogisticsController extends Controller
+{
+    /**
+     * GET /api/staff/logistics/inventory
+     * Returns warehouse inventory and shipments queue (BAST with expedition method).
+     */
+    public function inventory(Request $request)
+    {
+        // 1. Expedition shipments from BAST
+        $shipments = BastPengambilan::with(['klaim.laporan.user', 'klaim.barangTemuan'])
+            ->where('metode_ambil', 'ekspedisi')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($bast) {
+                $laporan = $bast->klaim?->laporan;
+                $user = $laporan?->user;
+                $barang = $bast->klaim?->barangTemuan;
+
+                // Status mapping:
+                // If nomor_resi exists and report is 'dikirim' -> 'Dikirim'
+                // If nomor_resi exists but report is 'bast' -> 'Dikemas'
+                // Otherwise -> 'Menunggu Resi'
+                $status = 'Menunggu Resi';
+                if ($bast->waktu_serah_terima || ($laporan && $laporan->status === 'selesai')) {
+                    $status = 'Selesai';
+                } elseif ($bast->nomor_resi) {
+                    $status = ($bast->status_bayar === 'dikemas') ? 'Dikemas' : 'Dikirim';
+                }
+
+                return [
+                    'id'        => $bast->id,
+                    'no'        => $laporan ? $laporan->kode : $bast->kode,
+                    'bast_code' => $bast->kode,
+                    'recipient' => $user ? $user->name : 'Penumpang KRL',
+                    'courier'   => $bast->kurir ?? 'KAI Logistik Express',
+                    'dest'      => $bast->alamat_kirim ?? 'Bogor Tengah, Bogor',
+                    'paid'      => $bast->created_at->format('j M, H:i'),
+                    'status'    => $status,
+                    'awb'       => $bast->nomor_resi,
+                ];
+            });
+
+        // 2. Storage items
+        $items = BarangTemuan::with(['kategori', 'stasiunTemuan'])
+            ->where('status_simpan', '!=', 'Diarsipkan')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($bt) {
+                return [
+                    'id'        => $bt->id,
+                    'code'      => $bt->kode,
+                    'cat'       => $bt->kategori?->nama ?? '',
+                    'name'      => $bt->nama_barang,
+                    'station'   => $bt->stasiunTemuan?->nama ?? '',
+                    'status'    => $bt->status_simpan,
+                    'locker'    => $bt->secret['locker'] ?? 'Belum ditentukan',
+                    'expiresIn' => $bt->expires_in,
+                ];
+            });
+
+        return response()->json([
+            'shipments' => $shipments,
+            'items'     => $items,
+        ]);
+    }
+
+    /**
+     * PATCH /api/staff/logistics/found-items/{id}
+     * Update warehouse rack / locker location or mutation status.
+     */
+    public function updateItem(Request $request, int $id)
+    {
+        $bt = BarangTemuan::findOrFail($id);
+        $user = $request->user();
+
+        $secret = $bt->secret ?? [];
+        if ($request->has('locker')) {
+            $secret['locker'] = $request->locker;
+        }
+        if ($request->has('notes')) {
+            $secret['notes'] = $request->notes;
+        }
+
+        $bt->secret = $secret;
+        if ($request->has('status')) {
+            $bt->status_simpan = $request->status;
+        }
+        $bt->save();
+
+        AuditLog::record($user->id, $user->name . ' (Logistik)', 'Update lokasi penyimpanan', "{$bt->kode} • " . ($secret['locker'] ?? ''));
+
+        return response()->json(['item' => $bt]);
+    }
+
+    /**
+     * POST /api/staff/logistics/shipments/{id}/ship
+     * Input tracking number (AWB / Resi) and mark shipment as shipped.
+     */
+    public function shipOrder(Request $request, int $id)
+    {
+        $request->validate([
+            'awb'    => 'nullable|string',
+            'action' => 'nullable|string', // 'pack', 'ship', or 'delivered'
+        ]);
+
+        $bast = BastPengambilan::with(['klaim.laporan', 'klaim.barangTemuan'])->findOrFail($id);
+        $user = $request->user();
+        $action = $request->input('action', 'ship');
+        $awb = strtoupper($request->input('awb') ?: ($bast->nomor_resi ?: 'KALOG-' . rand(10000000, 99999999) . 'ID'));
+
+        // Check AWB duplicate
+        $dup = BastPengambilan::where('nomor_resi', $awb)
+            ->where('id', '!=', $bast->id)
+            ->first();
+        if ($dup) {
+            return response()->json(['message' => 'Nomor resi sudah dipakai pada pengiriman lain.'], 422);
+        }
+
+        $bast->nomor_resi = $awb;
+        if ($action === 'pack') {
+            $bast->status_bayar = 'dikemas';
+        } elseif ($action === 'ship') {
+            $bast->status_bayar = 'dikirim';
+        } elseif ($action === 'delivered') {
+            $bast->status_bayar = 'selesai';
+            $bast->waktu_serah_terima = now();
+        }
+        $bast->save();
+
+        $laporan = $bast->klaim?->laporan;
+        if ($laporan) {
+            if ($action === 'delivered') {
+                $laporan->update(['status' => 'selesai']);
+                if ($bast->klaim?->barangTemuan) {
+                    $bast->klaim->barangTemuan->update(['status_simpan' => 'Selesai']);
+                }
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => "Paket ekspedisi ({$awb}) tiba di tujuan dan diterima penumpang. Selesai.",
+                ]);
+            } elseif ($action === 'ship') {
+                $laporan->update(['status' => 'dikirim']);
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => "Diserahkan ke kurir {$bast->kurir}. Resi: {$awb}.",
+                ]);
+            } else {
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => "Nomor resi {$awb} diterbitkan. Paket sedang dikemas.",
+                ]);
+            }
+        }
+
+        $actLabel = $action === 'delivered' ? 'Konfirmasi paket tiba (Selesai)' : ($action === 'ship' ? 'Serahkan ke kurir' : 'Input resi pengiriman');
+        AuditLog::record($user->id, $user->name . ' (Logistik)', $actLabel, "{$laporan?->kode} • Resi {$awb}");
+
+        $statusLabel = match ($action) {
+            'delivered' => 'Selesai',
+            'ship'      => 'Dikirim',
+            default     => 'Dikemas',
+        };
+
+        return response()->json([
+            'bast'    => $bast,
+            'status'  => $statusLabel,
+            'awb'     => $awb,
+            'message' => $action === 'delivered'
+                ? 'Simulasi pengiriman selesai: Paket telah diterima penumpang.'
+                : ($action === 'ship' ? 'Ditandai sudah diserahkan ke kurir.' : 'Resi pengiriman disimpan.'),
+        ]);
+    }
+}
