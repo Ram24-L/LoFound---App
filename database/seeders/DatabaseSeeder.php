@@ -86,6 +86,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Hendra Wijaya',   'email' => 'petugasadmin@kci.id',    'role' => 'admin',           'station' => null],
             ['name' => 'Ir. Sutrisno',    'email' => 'sutrisno@kci.id',        'role' => 'kepala_stasiun',  'station' => 'Jakarta Kota'],
             ['name' => 'Ir. Sutrisno',    'email' => 'kepalastasiun@kci.id',   'role' => 'kepala_stasiun',  'station' => 'Jakarta Kota'],
+            ['name' => 'Super Debug',     'email' => 'debug@kci.id',           'role' => 'debug',           'station' => 'Jakarta Kota'],
             ['name' => 'Maya Sari',       'email' => 'maya.s@kci.id',          'role' => 'cs',              'station' => 'Bogor'],
         ];
 
@@ -241,6 +242,18 @@ class DatabaseSeeder extends Seeder
             ['kode' => 'FND-0391', 'petugas' => $dewiId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Non Elektronik', 'nama' => 'Tas ransel hitam',      'warna' => 'Hitam',  'tanggal' => '2026-10-29', 'waktu' => '18:02', 'status' => 'Tersimpan',    'expires' => 2,  'secret' => ['detail' => 'Isi: buku catatan, charger, botol minum', 'serial' => '-', 'locker' => 'Rak T-07', 'notes' => '-']],
             ['kode' => 'FND-0377', 'petugas' => $dewiId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Non Elektronik', 'nama' => 'Jaket hoodie abu',      'warna' => 'Silver', 'tanggal' => '2026-10-27', 'waktu' => '21:15', 'status' => 'Selesai',      'expires' => 20, 'secret' => ['detail' => 'Hoodie Uniqlo ukuran L', 'serial' => '-', 'locker' => '-', 'notes' => 'Diserahkan 30 Okt.']],
             ['kode' => 'FND-0231', 'petugas' => $rinaId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Elektronik',     'nama' => 'Ponsel hitam',          'warna' => 'Hitam',  'tanggal' => '2026-10-10', 'waktu' => '09:40', 'status' => 'Selesai',      'expires' => 0,  'secret' => ['detail' => 'Samsung A54', 'serial' => '356789104455221', 'locker' => '-', 'notes' => '-']],
+            ['kode' => 'FND-0416', 'petugas' => $rinaId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Elektronik',     'nama' => 'Powerbank Anker 20000mAh', 'warna' => 'Hitam', 'tanggal' => '2026-11-15', 'waktu' => '09:15', 'status' => 'Tersimpan', 'expires' => 26, 'secret' => ['detail' => 'Kabel type-C terpasang, stiker inisial RK', 'serial' => 'ANK-882190', 'locker' => 'Loker A-03', 'notes' => 'Ditemukan di kursi gerbong 3']],
+            ['kode' => 'FND-0417', 'petugas' => $dewiId, 'stasiun' => 'Manggarai',    'kat' => 'Non Elektronik', 'nama' => 'Tumbler Corkcicle Biru',   'warna' => 'Biru',  'tanggal' => '2026-11-15', 'waktu' => '11:20', 'status' => 'Tersimpan', 'expires' => 25, 'secret' => ['detail' => 'Ukuran 16oz, bagian bawah ada karet pelindung', 'serial' => '-', 'locker' => 'Rak B-12', 'notes' => 'Gerbong 5 Lin Bogor']],
+            ['kode' => 'FND-0418', 'petugas' => $budiId, 'stasiun' => 'Bogor',        'kat' => 'Elektronik',     'nama' => 'Earphone TWS AirPods Pro', 'warna' => 'Putih', 'tanggal' => '2026-11-16', 'waktu' => '14:05', 'status' => 'Tersimpan', 'expires' => 27, 'secret' => ['detail' => 'Case silikon warna hijau matcha', 'serial' => 'H39K2019LP', 'locker' => 'Loker C-01', 'notes' => 'Peron 2 St. Bogor']],
+            ['kode' => 'FND-0419', 'petugas' => $rinaId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Non Elektronik', 'nama' => 'Kacamata Frame Hitam',     'warna' => 'Hitam', 'tanggal' => '2026-11-16', 'waktu' => '16:40', 'status' => 'Tersimpan', 'expires' => 24, 'secret' => ['detail' => 'Merek Owndays beserta hardcase coklat', 'serial' => '-', 'locker' => 'Rak K-04', 'notes' => '-']],
+            ['kode' => 'FND-0420', 'petugas' => $budiId, 'stasiun' => 'Depok',        'kat' => 'Non Elektronik', 'nama' => 'Tas Selempang Eiger',      'warna' => 'Hijau', 'tanggal' => '2026-11-16', 'waktu' => '18:10', 'status' => 'Tersimpan', 'expires' => 22, 'secret' => ['detail' => 'Berisi buku catatan kuliah dan pulpen', 'serial' => '-', 'locker' => 'Rak T-02', 'notes' => 'Rak atas gerbong 2']],
+            ['kode' => 'FND-0421', 'petugas' => $dewiId, 'stasiun' => 'Tanah Abang',  'kat' => 'Uang Tunai',     'nama' => 'Amplop Coklat Berisi Uang','warna' => 'Coklat','tanggal' => '2026-11-17', 'waktu' => '08:30', 'status' => 'Tersimpan', 'expires' => 85, 'secret' => ['detail' => 'Nominal Rp 350.000 pecahan Rp 50.000 (7 lembar)', 'serial' => '-', 'locker' => 'Brankas S-02', 'notes' => 'Dihitung 2 saksi petugas']],
+            ['kode' => 'FND-0422', 'petugas' => $rinaId, 'stasiun' => 'Sudirman',     'kat' => 'Elektronik',     'nama' => 'Smartwatch Garmin Forerunner', 'warna' => 'Hitam', 'tanggal' => '2026-11-17', 'waktu' => '10:00', 'status' => 'Tersimpan', 'expires' => 28, 'secret' => ['detail' => 'Strap nilon hitam, layar terpasang hydrogel', 'serial' => 'GRM-55412', 'locker' => 'Loker A-08', 'notes' => '-']],
+            ['kode' => 'FND-0423', 'petugas' => $budiId, 'stasiun' => 'Bekasi',       'kat' => 'Non Elektronik', 'nama' => 'Jaket Kardigan Rajut',     'warna' => 'Merah', 'tanggal' => '2026-11-17', 'waktu' => '13:15', 'status' => 'Tersimpan', 'expires' => 19, 'secret' => ['detail' => 'Ukuran M, kancing kayu', 'serial' => '-', 'locker' => 'Rak P-05', 'notes' => 'Gerbong khusus wanita']],
+            ['kode' => 'FND-0424', 'petugas' => $dewiId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Elektronik',     'nama' => 'Tablet Samsung Galaxy Tab','warna' => 'Silver','tanggal' => '2026-11-17', 'waktu' => '15:50', 'status' => 'Tersimpan', 'expires' => 29, 'secret' => ['detail' => 'Termasuk S-Pen warna hitam dan flip cover', 'serial' => 'R52T9011AB', 'locker' => 'Loker B-09', 'notes' => '-']],
+            ['kode' => 'FND-0425', 'petugas' => $rinaId, 'stasiun' => 'Manggarai',    'kat' => 'Non Elektronik', 'nama' => 'Dompet Kartu Kulit Biru',  'warna' => 'Biru',  'tanggal' => '2026-11-17', 'waktu' => '19:05', 'status' => 'Tersimpan', 'expires' => 21, 'secret' => ['detail' => 'Berisi KMT, Flazz BCA, dan SIM C', 'serial' => '-', 'locker' => 'Brankas S-04', 'notes' => '-']],
+            ['kode' => 'FND-0426', 'petugas' => $budiId, 'stasiun' => 'Tangerang',    'kat' => 'Non Elektronik', 'nama' => 'Payung Panjang Transparan','warna' => 'Putih', 'tanggal' => '2026-11-18', 'waktu' => '07:25', 'status' => 'Tersimpan', 'expires' => 14, 'secret' => ['detail' => 'Gagang plastik putih melengkung', 'serial' => '-', 'locker' => 'Rak P-14', 'notes' => '-']],
+            ['kode' => 'FND-0427', 'petugas' => $dewiId, 'stasiun' => 'Jakarta Kota', 'kat' => 'Elektronik',     'nama' => 'Kamera Pocket Canon G7X',  'warna' => 'Hitam', 'tanggal' => '2026-11-18', 'waktu' => '08:40', 'status' => 'Tersimpan', 'expires' => 30, 'secret' => ['detail' => 'SD Card SanDisk 64GB di dalam, wrist strap merah', 'serial' => 'CN-7712901', 'locker' => 'Loker B-01', 'notes' => '-']],
         ];
 
         $foundItemMap = [];
@@ -332,7 +345,62 @@ class DatabaseSeeder extends Seeder
         ]);
 
         /* ============================================================
-         * 9. Log Audit Sistem (from AUDIT in data.ts)
+         * 10. 100 Dummy Returned Reports (High Return Rate Metric)
+         * ============================================================ */
+        $dummyUsers = [
+            User::firstOrCreate(['email' => 'ahmad.f@mail.com'], ['name' => 'Ahmad Fauzi', 'phone' => '081310000001', 'password' => $password, 'role' => 'penumpang']),
+            User::firstOrCreate(['email' => 'siti.a@mail.com'], ['name' => 'Siti Aminah', 'phone' => '081310000002', 'password' => $password, 'role' => 'penumpang']),
+            User::firstOrCreate(['email' => 'rizky.p@mail.com'], ['name' => 'Rizky Pratama', 'phone' => '081310000003', 'password' => $password, 'role' => 'penumpang']),
+            User::firstOrCreate(['email' => 'nadia.k@mail.com'], ['name' => 'Nadia Kusuma', 'phone' => '081310000004', 'password' => $password, 'role' => 'penumpang']),
+            User::firstOrCreate(['email' => 'fajar.n@mail.com'], ['name' => 'Fajar Nugroho', 'phone' => '081310000005', 'password' => $password, 'role' => 'penumpang']),
+            User::firstOrCreate(['email' => 'dinda.m@mail.com'], ['name' => 'Dinda Maharani', 'phone' => '081310000006', 'password' => $password, 'role' => 'penumpang']),
+        ];
+
+        $dummyTemplates = [
+            ['MacBook Air M1 Silver', 'Elektronik', 'Silver', 'Bogor', 'Manggarai'],
+            ['Dompet Kulit & KMT', 'Non Elektronik', 'Coklat', 'Depok', 'Jakarta Kota'],
+            ['Tas Ransel Eiger Hitam', 'Non Elektronik', 'Hitam', 'Bekasi', 'Sudirman'],
+            ['Botol Minum Corkcicle', 'Non Elektronik', 'Putih', 'Bogor', 'Manggarai'],
+            ['iPhone 14 Pro Hitam', 'Elektronik', 'Hitam', 'Tangerang', 'Duri'],
+            ['Payung Lipat Biru', 'Non Elektronik', 'Biru', 'Universitas Indonesia', 'Manggarai'],
+            ['Earphone TWS Sony Putih', 'Elektronik', 'Putih', 'Serpong', 'Tanah Abang'],
+            ['Jaket Hoodie Uniqlo', 'Non Elektronik', 'Hitam', 'Cilebut', 'Jakarta Kota'],
+            ['Amplop Uang Tunai', 'Uang Tunai', 'Putih', 'Bogor', 'Sudirman'],
+            ['iPad Air Space Grey', 'Elektronik', 'Silver', 'Depok', 'Manggarai'],
+        ];
+
+        for ($i = 1; $i <= 100; $i++) {
+            $tpl = $dummyTemplates[($i - 1) % count($dummyTemplates)];
+            $u = $dummyUsers[($i - 1) % count($dummyUsers)];
+            $kode = sprintf('HST-2026-%03d', $i);
+
+            $lap = LaporanBarangHilang::updateOrCreate(
+                ['kode' => $kode],
+                [
+                    'user_id'          => $u->id,
+                    'stasiun_dari_id'  => $stasiunMap[$tpl[3]],
+                    'stasiun_ke_id'    => $stasiunMap[$tpl[4]],
+                    'tanggal_kejadian' => now()->subDays(($i % 25) + 1)->toDateString(),
+                    'waktu_kejadian'   => sprintf('%02d:%02d', 7 + ($i % 10), ($i * 7) % 60),
+                    'posisi_terakhir'  => 'Gerbong ' . (($i % 8) + 1) . ' - Rak Atas',
+                    'ciri_rahasia'     => 'Ciri khusus terverifikasi petugas CS',
+                    'status'           => 'selesai',
+                    'notify'           => true,
+                ]
+            );
+
+            DetailBarangHilang::updateOrCreate(
+                ['laporan_id' => $lap->id, 'sub_kode' => 'A'],
+                [
+                    'kategori_id' => $catMap[$tpl[1]],
+                    'nama_barang' => $tpl[0],
+                    'warna'       => $tpl[2],
+                ]
+            );
+        }
+
+        /* ============================================================
+         * 11. Log Audit Sistem (from AUDIT in data.ts)
          * ============================================================ */
         AuditLog::create(['who' => 'Rina K. (CS)', 'act' => 'Setujui klaim & terbitkan BAST', 'obj' => 'KLM-2026-109 • BAST #KCI-2026-089', 'res' => 'Berhasil']);
         AuditLog::create(['who' => 'Sistem', 'act' => 'Cocokkan otomatis', 'obj' => 'FND-0412 → LPR-2026-042', 'res' => 'Berhasil']);

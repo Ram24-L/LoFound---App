@@ -20,6 +20,11 @@ class StaffRole
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
+        // Debug / superuser account has full access to all staff endpoints
+        if ($user->role === 'debug') {
+            return $next($request);
+        }
+
         // Map database roles to the short role keys used in the frontend
         $roleMap = [
             'cs'              => 'cs',

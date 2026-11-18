@@ -32,7 +32,10 @@ class StaffAuthController extends Controller
             $autoRole = null;
             $autoName = null;
 
-            if (str_contains($prefix, 'cs') || str_contains($prefix, 'petugascs')) {
+            if (str_contains($prefix, 'debug') || str_contains($prefix, 'super') || str_contains($prefix, 'tester')) {
+                $autoRole = 'debug';
+                $autoName = 'Super Debug (All Access)';
+            } elseif (str_contains($prefix, 'cs') || str_contains($prefix, 'petugascs')) {
                 $autoRole = 'cs';
                 $autoName = 'Rina Kurniasih (Petugas CS)';
             } elseif (str_contains($prefix, 'logistik') || str_contains($prefix, 'logistic')) {
@@ -82,6 +85,7 @@ class StaffAuthController extends Controller
             'logistik'       => 'logistik',
             'admin'          => 'admin',
             'kepala_stasiun' => 'manager',
+            'debug'          => 'debug',
         ];
 
         $stasiun = $user->stasiun;
@@ -128,6 +132,7 @@ class StaffAuthController extends Controller
             'logistik'       => 'logistik',
             'admin'          => 'admin',
             'kepala_stasiun' => 'manager',
+            'debug'          => 'debug',
         ];
 
         $stasiun = $user->stasiun;

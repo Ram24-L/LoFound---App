@@ -4,7 +4,7 @@ import type { Claim, InvItem } from '../lib/data'
 import type { StaffUser } from '../lib/api'
 import { cx, IconButton } from '../lib/ui'
 
-export type Role = 'cs' | 'logistik' | 'admin' | 'manager'
+export type Role = 'cs' | 'logistik' | 'admin' | 'manager' | 'debug'
 export type Page = 'inventory' | 'item' | 'claims' | 'handover' | 'shipping' | 'master' | 'audit' | 'dashboard' | 'forbidden'
 
 export const ROLE_META: Record<Role, { label: string; short: string; name: string; initials: string }> = {
@@ -12,6 +12,7 @@ export const ROLE_META: Record<Role, { label: string; short: string; name: strin
   logistik: { label: 'Petugas Logistik', short: 'Petugas Logistik • JAKK', name: 'Agus Pratama', initials: 'AP' },
   admin: { label: 'Administrator Sistem', short: 'Administrator • Pusat', name: 'Hendra Wijaya', initials: 'HW' },
   manager: { label: 'Kepala Stasiun', short: 'Kepala Stasiun • JAKK', name: 'Ir. Sutrisno', initials: 'SU' },
+  debug: { label: 'Debug All-Access', short: 'Debug All-Access • Semua Fitur', name: 'Super Debug', initials: 'DB' },
 }
 
 export type StaffCtxT = {

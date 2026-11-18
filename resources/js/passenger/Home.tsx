@@ -11,7 +11,7 @@ const CATS = ['Semua Kategori', ...CATEGORIES]
 export function HomeScreen() {
   const { user, go, reports, unread, requireAuth, draft, setDraft } = useApp()
   const [cat, setCat] = useState('Semua Kategori')
-  const [from, setFrom] = useState('Lin Bogor')
+  const [from, setFrom] = useState('St. Bogor')
   const [to, setTo] = useState('St. Manggarai')
   const [picker, setPicker] = useState<'from' | 'to' | null>(null)
   const [howSheet, setHowSheet] = useState(false)
@@ -29,7 +29,11 @@ export function HomeScreen() {
   }, [])
 
   const active = user ? reports.filter((r) => !['selesai', 'dibatalkan', 'kedaluwarsa'].includes(r.status)) : []
-  const feed = feedData.filter((f) => (cat === 'Semua Kategori' || f.cat === cat) && (from === 'Lin Bogor' ? f.line === 'Lin Bogor' : f.from === from.replace('St. ', '')))
+  const feed = feedData.filter(
+    (f) =>
+      (cat === 'Semua Kategori' || f.cat === cat) &&
+      (from === 'Semua Stasiun' ? true : f.from === from.replace('St. ', '')),
+  )
   const effective = feedState === 'normal' && feed.length === 0 ? 'empty' : feedState
 
   const startReport = () => go('wizard')
@@ -196,7 +200,7 @@ export function HomeScreen() {
                       size="sm"
                       onClick={() => {
                         setCat('Semua Kategori')
-                        setFrom('Lin Bogor')
+                        setFrom('Semua Stasiun')
                         setTo('St. Manggarai')
                         setFeedState('normal')
                       }}
@@ -330,8 +334,34 @@ function BentoMetrics({ onHow }: { onHow: () => void }) {
 
 export function StationPicker({ open, onClose, onPick, allowLines }: { open: boolean; onClose: () => void; onPick: (v: string) => void; allowLines?: boolean }) {
   const [q, setQ] = useState('')
-  const lines = [...new Set(STATIONS.map((s) => s.line))]
-  const list = STATIONS.filter((s) => s.name.toLowerCase().includes(q.toLowerCase()))
+  const [selectedLine, setSelectedLine] = useState('Semua Lin')
+  const [dynamicStations, setDynamicStations] = useState(STATIONS)
+
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/stations', { headers: { Accept: 'application/json' } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setDynamicStations(
+            data.map((s: any) => ({
+              code: s.kode || s.code,
+              name: s.nama || s.name,
+              line: s.lin || s.line,
+            })),
+          )
+        }
+      })
+      .catch(() => {})
+  }, [open])
+
+  const lines = ['Semua Lin', ...new Set(dynamicStations.map((s) => s.line))]
+  const list = dynamicStations.filter(
+    (s) =>
+      (selectedLine === 'Semua Lin' || s.line === selectedLine) &&
+      (s.name.toLowerCase().includes(q.toLowerCase()) || s.code.toLowerCase().includes(q.toLowerCase())),
+  )
+
   return (
     <Sheet open={open} onClose={onClose} title="Pilih Stasiun">
       <label className="sr-only" htmlFor="st-search">
@@ -341,20 +371,27 @@ export function StationPicker({ open, onClose, onPick, allowLines }: { open: boo
         <Search className="absolute left-3.5 top-3.5 size-5 text-soft" aria-hidden />
         <input id="st-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari stasiun, contoh: Manggarai" className={inputCls() + ' h-12 pl-11'} />
       </div>
-      {allowLines && !q && (
-        <>
-          <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-muted">Seluruh Lin</p>
-          <div className="flex flex-wrap gap-2">
-            {lines.map((l) => (
-              <Pill key={l} onClick={() => onPick(l)}>
-                {l}
-              </Pill>
-            ))}
-          </div>
-        </>
-      )}
-      <p className="mb-1 mt-4 text-xs font-bold uppercase tracking-wide text-muted">Stasiun</p>
+      <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-muted">Filter Berdasarkan Lin</p>
+      <div className="flex flex-wrap gap-2">
+        {lines.map((l) => (
+          <Pill key={l} active={selectedLine === l} onClick={() => setSelectedLine(l)}>
+            {l}
+          </Pill>
+        ))}
+      </div>
+      <p className="mb-1 mt-4 text-xs font-bold uppercase tracking-wide text-muted">
+        Stasiun {selectedLine !== 'Semua Lin' ? `(${selectedLine})` : ''}
+      </p>
       <ul className="flex flex-col">
+        {allowLines && selectedLine === 'Semua Lin' && !q && (
+          <li>
+            <button onClick={() => onPick('Semua Stasiun')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-tint">
+              <span className="w-12 rounded-lg bg-primary py-1 text-center text-[11px] font-bold text-white">ALL</span>
+              <span className="flex-1 text-sm font-bold text-primary">Semua Stasiun</span>
+              <span className="text-xs text-muted">Seluruh Rute</span>
+            </button>
+          </li>
+        )}
         {list.map((s) => (
           <li key={s.code}>
             <button onClick={() => onPick('St. ' + s.name)} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-tint">
@@ -364,7 +401,7 @@ export function StationPicker({ open, onClose, onPick, allowLines }: { open: boo
             </button>
           </li>
         ))}
-        {list.length === 0 && <p className="py-6 text-center text-sm text-muted">Stasiun tidak ditemukan.</p>}
+        {list.length === 0 && <p className="py-6 text-center text-sm text-muted">Stasiun tidak ditemukan pada lin ini.</p>}
       </ul>
     </Sheet>
   )

@@ -242,8 +242,8 @@ export function Toggle({ checked, onChange, label, description, disabled }: { ch
         onClick={() => onChange(!checked)}
         className="flex h-11 w-14 shrink-0 items-center justify-center"
       >
-        <span className={cx('relative h-7 w-12 rounded-full transition-colors', checked ? 'bg-success' : 'bg-[#cdd6dc]')}>
-          <span className={cx('absolute top-0.5 size-6 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+        <span className={cx('relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors', checked ? 'bg-success' : 'bg-[#cdd6dc]')}>
+          <span className={cx('absolute left-0.5 top-0.5 size-6 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-5' : 'translate-x-0')} />
         </span>
       </button>
     </div>

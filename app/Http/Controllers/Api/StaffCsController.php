@@ -27,18 +27,14 @@ class StaffCsController extends Controller
         $user = $request->user();
         $stasiunId = $user->stasiun_id;
 
-        // Inventory (found items) for this station or all if admin
+        // Inventory (found items) across KRL stations
         $inventoryQuery = BarangTemuan::with(['kategori', 'stasiunTemuan', 'petugas'])
             ->orderByDesc('created_at');
-
-        if ($stasiunId) {
-            $inventoryQuery->where('stasiun_temuan_id', $stasiunId);
-        }
 
         $inventory = $inventoryQuery->get()->map(fn($bt) => $this->mapInventoryItem($bt));
 
         // Claims queue (existing KlaimVerifikasi + active LaporanBarangHilang without a claim yet)
-        $existingClaims = KlaimVerifikasi::with(['laporan.detailBarang.kategori', 'laporan.user', 'barangTemuan', 'verifier'])
+        $existingClaims = KlaimVerifikasi::with(['laporan.detailBarang.kategori', 'laporan.user', 'barangTemuan.kategori', 'verifier'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn($k) => $this->mapClaim($k));
@@ -606,18 +602,27 @@ class StaffCsController extends Controller
         $slaMin = (int) now()->diffInMinutes($k->created_at);
 
         return [
-            'id'        => $k->id,
-            'no'        => $k->kode,
-            'reporter'  => $masked,
-            'item'      => $item ? $item->nama_barang : ($barang ? $barang->nama_barang : ''),
-            'itemCode'  => $barang?->kode ?? '',
-            'submitted' => $k->created_at->format('H:i'),
-            'slaMin'    => max(0, 120 - $slaMin),
-            'handler'   => $k->verifier ? $k->verifier->name : null,
-            'tab'       => $tabMap[$k->status_verifikasi] ?? 'baru',
-            'status'    => $k->status_verifikasi,
-            'answer'    => $k->jawaban_rahasia ?: ($laporan?->ciri_rahasia ?? ''),
-            'note'      => $k->catatan_cs,
+            'id'              => $k->id,
+            'no'              => $k->kode,
+            'reporter'        => $masked,
+            'reporterFull'    => $user ? $user->name : $masked,
+            'reporterContact' => $user ? ($user->email ?? $user->phone ?? '-') : '-',
+            'nik'             => $k->nik ?: ($user?->nik ?? null),
+            'ktpPhoto'        => $k->bukti_tambahan,
+            'referencePhoto'  => $laporan?->foto_referensi,
+            'route'           => ($laporan?->stasiunDari?->nama ?? '-') . ' → ' . ($laporan?->stasiunKe?->nama ?? '-'),
+            'incidentTime'    => ($laporan?->tanggal_kejadian?->format('j M Y') ?? '-') . ', ' . ($laporan?->waktu_kejadian ?? '-') . ' WIB',
+            'position'        => $laporan?->posisi_terakhir ?? '-',
+            'category'        => $item?->kategori?->nama ?? $barang?->kategori?->nama ?? 'Elektronik',
+            'item'            => $item ? $item->nama_barang : ($barang ? $barang->nama_barang : ''),
+            'itemCode'        => $barang?->kode ?? '',
+            'submitted'       => $k->created_at->format('H:i'),
+            'slaMin'          => max(0, 120 - $slaMin),
+            'handler'         => $k->verifier ? $k->verifier->name : null,
+            'tab'             => $tabMap[$k->status_verifikasi] ?? 'baru',
+            'status'          => $k->status_verifikasi,
+            'answer'          => $k->jawaban_rahasia ?: ($laporan?->ciri_rahasia ?? ''),
+            'note'            => $k->catatan_cs,
         ];
     }
 
@@ -640,18 +645,27 @@ class StaffCsController extends Controller
         };
 
         return [
-            'id'        => -1 * $laporan->id,
-            'no'        => $laporan->kode,
-            'reporter'  => trim($masked) ?: $name,
-            'item'      => $item ? $item->nama_barang : 'Barang Hilang',
-            'itemCode'  => $matchedBt?->kode ?? ('St. ' . ($laporan->stasiunKe?->nama ?? 'Manggarai')),
-            'submitted' => $laporan->created_at->format('H:i'),
-            'slaMin'    => max(0, 120 - $slaMin),
-            'handler'   => null,
-            'tab'       => $tab,
-            'status'    => 'menunggu',
-            'answer'    => $laporan->ciri_rahasia ?: "Posisi: {$laporan->posisi_terakhir} ({$laporan->stasiunDari?->nama} → {$laporan->stasiunKe?->nama})",
-            'note'      => null,
+            'id'              => -1 * $laporan->id,
+            'no'              => $laporan->kode,
+            'reporter'        => trim($masked) ?: $name,
+            'reporterFull'    => $name,
+            'reporterContact' => $user ? ($user->email ?? $user->phone ?? '-') : '-',
+            'nik'             => $user?->nik ?? null,
+            'ktpPhoto'        => null,
+            'referencePhoto'  => $laporan->foto_referensi,
+            'route'           => ($laporan->stasiunDari?->nama ?? '-') . ' → ' . ($laporan->stasiunKe?->nama ?? '-'),
+            'incidentTime'    => ($laporan->tanggal_kejadian?->format('j M Y') ?? '-') . ', ' . ($laporan->waktu_kejadian ?? '-') . ' WIB',
+            'position'        => $laporan->posisi_terakhir ?? '-',
+            'category'        => $item?->kategori?->nama ?? 'Elektronik',
+            'item'            => $item ? $item->nama_barang : 'Barang Hilang',
+            'itemCode'        => $matchedBt?->kode ?? ('St. ' . ($laporan->stasiunKe?->nama ?? 'Manggarai')),
+            'submitted'       => $laporan->created_at->format('H:i'),
+            'slaMin'          => max(0, 120 - $slaMin),
+            'handler'         => null,
+            'tab'             => $tab,
+            'status'          => 'menunggu',
+            'answer'          => $laporan->ciri_rahasia ?: "Posisi: {$laporan->posisi_terakhir} ({$laporan->stasiunDari?->nama} → {$laporan->stasiunKe?->nama})",
+            'note'            => null,
         ];
     }
 }

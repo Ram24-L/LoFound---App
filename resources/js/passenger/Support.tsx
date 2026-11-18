@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
-import { AlertTriangle, BellOff, ChevronDown, ChevronRight, CircleHelp, Compass, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Search, ServerCrash, ShieldAlert, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, BellOff, ChevronDown, ChevronRight, CircleHelp, Compass, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Pencil, Plus, Search, ServerCrash, ShieldAlert, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
 import { NOTIFS } from '../lib/data'
-import { Button, cx, Dialog, EmptyState, Field, inputCls, Toggle, useToast } from '../lib/ui'
+import { Badge, Button, cx, Dialog, EmptyState, Field, inputCls, rupiah, Toggle, useToast } from '../lib/ui'
+import { authApi, type SavedAddress } from '../lib/api'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -111,12 +112,107 @@ function SwipeRow({ children, onDelete }: { children: React.ReactNode; onDelete:
 }
 
 export function ProfileScreen() {
-  const { user, logout, go, expireSession } = useApp()
+  const { user, login, logout, go } = useApp()
   const toast = useToast()
   const [notif, setNotif] = useState({ wa: true, email: true, push: false })
   const [section, setSection] = useState<string | null>(null)
   const [del, setDel] = useState<0 | 1 | 2>(0)
   const [confirmText, setConfirmText] = useState('')
+
+  // Profile Data Diri & Password state
+  const [editNik, setEditNik] = useState(user?.nik || '')
+  const [newPw, setNewPw] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  // Saved Address CRUD state (no pre-fill)
+  const [editingAddr, setEditingAddr] = useState(false)
+  const [addrForm, setAddrForm] = useState<SavedAddress>({
+    label: user?.address?.label || 'Rumah',
+    name: user?.address?.name || user?.full || '',
+    wa: user?.address?.wa || '',
+    addr: user?.address?.addr || '',
+    city: user?.address?.city || '',
+    zip: user?.address?.zip || '',
+  })
+
+  // Transactions CRUD state (no pre-fill, loaded from DB)
+  const [trxList, setTrxList] = useState<Array<{ id: number; bast_code: string; report_code: string; item: string; courier: string; amount: number; status: string; awb?: string; address?: string; date: string }>>([])
+  const [loadingTrx, setLoadingTrx] = useState(false)
+
+  useEffect(() => {
+    setEditNik(user?.nik || '')
+    if (user?.address) {
+      setAddrForm({
+        label: user.address.label || 'Rumah',
+        name: user.address.name || user.full || '',
+        wa: user.address.wa || '',
+        addr: user.address.addr || '',
+        city: user.address.city || '',
+        zip: user.address.zip || '',
+      })
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (section === 'trx' && user) {
+      setLoadingTrx(true)
+      authApi.transactions()
+        .then(setTrxList)
+        .catch(() => {})
+        .finally(() => setLoadingTrx(false))
+    }
+  }, [section, user])
+
+  const initials = (user?.full || user?.name || 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('')
+
+  const handleSaveAddress = async () => {
+    if (!addrForm.addr.trim() || !addrForm.city.trim()) {
+      toast('Alamat lengkap dan kota wajib diisi.', { tone: 'info' })
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const res = await authApi.updateProfile({ address: addrForm })
+      login(res.user)
+      setEditingAddr(false)
+      toast('Alamat berhasil disimpan ke profil.')
+    } catch (err: any) {
+      toast(err.message || 'Gagal menyimpan alamat.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const handleDeleteAddress = async () => {
+    setSavingProfile(true)
+    try {
+      const res = await authApi.updateProfile({ address: null })
+      login(res.user)
+      setAddrForm({ label: 'Rumah', name: user?.full || '', wa: '', addr: '', city: '', zip: '' })
+      setEditingAddr(false)
+      toast('Alamat tersimpan dihapus.')
+    } catch (err: any) {
+      toast(err.message || 'Gagal menghapus alamat.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const handleDeleteTransaction = async (id: number) => {
+    try {
+      await authApi.deleteTransaction(id)
+      setTrxList((prev) => prev.filter((t) => t.id !== id))
+      toast('Riwayat transaksi dihapus.')
+    } catch (err: any) {
+      toast(err.message || 'Gagal menghapus riwayat transaksi.')
+    }
+  }
+
   const rows: { k: string; l: string; icon: typeof User; danger?: boolean; run?: () => void }[] = [
     { k: 'data', l: 'Data Diri', icon: User },
     { k: 'pw', l: 'Ubah Kata Sandi', icon: KeyRound },
@@ -125,7 +221,6 @@ export function ProfileScreen() {
     { k: 'trx', l: 'Riwayat Transaksi', icon: History },
     { k: 'help', l: 'Bantuan', icon: CircleHelp, run: () => go('help') },
     { k: 'privacy', l: 'Kebijakan Privasi', icon: FileLock2 },
-    { k: 'sys', l: 'Halaman Sistem (404/403/500)', icon: Compass, run: () => go('system', { kind: '404' }) },
     { k: 'del', l: 'Hapus Akun', icon: Trash2, danger: true, run: () => setDel(1) },
   ]
   return (
@@ -133,7 +228,7 @@ export function ProfileScreen() {
       <header className="bg-primary px-5 pb-6 pt-5 text-white">
         <h1 className="text-[22px] font-bold">Profil</h1>
         <div className="mt-4 flex items-center gap-3">
-          <span className="flex size-14 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">MR</span>
+          <span className="flex size-14 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">{initials}</span>
           <div>
             <p className="text-base font-bold">{user?.full}</p>
             <p className="text-xs text-white/80">{user?.contact}</p>
@@ -159,35 +254,174 @@ export function ProfileScreen() {
                     </div>
                   )}
                   {r.k === 'data' && (
-                    <dl className="grid grid-cols-[90px_1fr] gap-y-1.5 text-[13px]">
-                      <dt>Nama</dt>
-                      <dd className="font-semibold text-ink">{user?.full}</dd>
-                      <dt>Kontak</dt>
-                      <dd className="font-semibold text-ink">{user?.contact}</dd>
-                      <dt>NIK</dt>
-                      <dd className="font-semibold text-ink">3201************</dd>
-                    </dl>
+                    <div className="flex flex-col gap-3">
+                      <dl className="grid grid-cols-[90px_1fr] gap-y-1.5 text-[13px]">
+                        <dt>Nama</dt>
+                        <dd className="font-semibold text-ink">{user?.full}</dd>
+                        <dt>Kontak</dt>
+                        <dd className="font-semibold text-ink">{user?.contact}</dd>
+                        <dt>NIK</dt>
+                        <dd className="font-semibold text-ink">{user?.nik || 'Belum diisi'}</dd>
+                      </dl>
+                      <Field label="Simpan / Ubah NIK (16 digit)">
+                        {(a) => (
+                          <div className="flex gap-2">
+                            <input
+                              {...a}
+                              maxLength={16}
+                              value={editNik}
+                              onChange={(e) => setEditNik(e.target.value.replace(/\D/g, ''))}
+                              placeholder="3201xxxxxxxxxxxx"
+                              className={inputCls() + ' h-10 font-mono text-xs'}
+                            />
+                            <Button
+                              size="sm"
+                              disabled={editNik.length !== 16 || savingProfile}
+                              loading={savingProfile}
+                              onClick={async () => {
+                                setSavingProfile(true)
+                                try {
+                                  const res = await authApi.updateProfile({ nik: editNik })
+                                  login(res.user)
+                                  toast('NIK disimpan ke profil.')
+                                } catch {}
+                                setSavingProfile(false)
+                              }}
+                            >
+                              Simpan
+                            </Button>
+                          </div>
+                        )}
+                      </Field>
+                    </div>
                   )}
                   {r.k === 'pw' && (
                     <div className="flex flex-col gap-3">
                       <Field label="Kata Sandi Lama">{(a) => <input {...a} type="password" className={inputCls() + ' h-11'} />}</Field>
-                      <Field label="Kata Sandi Baru" helper="Minimal 8 karakter, kombinasi huruf dan angka.">{(a) => <input {...a} type="password" className={inputCls() + ' h-11'} />}</Field>
-                      <Button size="sm" onClick={() => (toast('Kata sandi diperbarui.'), setSection(null))}>
+                      <Field label="Kata Sandi Baru" helper="Minimal 8 karakter, kombinasi huruf dan angka.">
+                        {(a) => <input {...a} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} className={inputCls() + ' h-11'} />}
+                      </Field>
+                      <Button
+                        size="sm"
+                        disabled={newPw.length < 8 || savingProfile}
+                        loading={savingProfile}
+                        onClick={async () => {
+                          setSavingProfile(true)
+                          try {
+                            await authApi.updateProfile({ password: newPw })
+                            setNewPw('')
+                            toast('Kata sandi berhasil diperbarui.')
+                            setSection(null)
+                          } catch (err: any) {
+                            toast(err.message || 'Gagal memperbarui kata sandi.')
+                          } finally {
+                            setSavingProfile(false)
+                          }
+                        }}
+                      >
                         Simpan Kata Sandi
                       </Button>
                     </div>
                   )}
-                  {r.k === 'addr' && <p className="text-[13px]"><b className="text-ink">Rumah</b> • Jl. Pajajaran No. 21, Bogor Tengah, 16143</p>}
-                  {r.k === 'trx' && <p className="text-[13px]"><b className="text-ink">Rp 25.500</b> • Ongkir #LPR-2026-042 • Lunas (simulasi)</p>}
+                  {r.k === 'addr' && (
+                    <div className="flex flex-col gap-3">
+                      {!editingAddr && user?.address?.addr ? (
+                        <div className="flex items-start justify-between gap-2 rounded-xl border border-line bg-white p-3">
+                          <div className="text-[13px]">
+                            <p className="font-bold text-ink">
+                              {user.address.label || 'Rumah'} • {user.address.name} ({user.address.wa})
+                            </p>
+                            <p className="mt-0.5 text-muted">
+                              {user.address.addr}, {user.address.city} {user.address.zip}
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditingAddr(true)}>
+                              Ubah
+                            </Button>
+                            <Button size="sm" variant="ghost" icon={Trash2} onClick={handleDeleteAddress} className="text-danger">
+                              Hapus
+                            </Button>
+                          </div>
+                        </div>
+                      ) : !editingAddr ? (
+                        <div className="flex flex-col items-start gap-2">
+                          <p className="text-[13px] text-muted">Belum ada alamat pengiriman yang disimpan.</p>
+                          <Button size="sm" variant="outline" icon={Plus} onClick={() => setEditingAddr(true)}>
+                            Tambah Alamat Baru
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2.5 rounded-xl border border-line bg-white p-3">
+                          <Field label="Label Alamat (Rumah / Kantor)">
+                            {(a) => <input {...a} value={addrForm.label || ''} onChange={(e) => setAddrForm({ ...addrForm, label: e.target.value })} placeholder="Rumah" className={inputCls() + ' h-10'} />}
+                          </Field>
+                          <Field label="Nama Penerima">
+                            {(a) => <input {...a} value={addrForm.name} onChange={(e) => setAddrForm({ ...addrForm, name: e.target.value })} placeholder="Nama penerima" className={inputCls() + ' h-10'} />}
+                          </Field>
+                          <Field label="Nomor WhatsApp">
+                            {(a) => <input {...a} value={addrForm.wa} onChange={(e) => setAddrForm({ ...addrForm, wa: e.target.value })} placeholder="0812xxxxxxxx" className={inputCls() + ' h-10'} />}
+                          </Field>
+                          <Field label="Alamat Lengkap">
+                            {(a) => <input {...a} value={addrForm.addr} onChange={(e) => setAddrForm({ ...addrForm, addr: e.target.value })} placeholder="Nama jalan, nomor rumah, RT/RW" className={inputCls() + ' h-10'} />}
+                          </Field>
+                          <div className="grid grid-cols-[1fr_100px] gap-2">
+                            <Field label="Kota/Kecamatan">
+                              {(a) => <input {...a} value={addrForm.city} onChange={(e) => setAddrForm({ ...addrForm, city: e.target.value })} placeholder="Kota / Kecamatan" className={inputCls() + ' h-10'} />}
+                            </Field>
+                            <Field label="Kode Pos">
+                              {(a) => <input {...a} maxLength={5} value={addrForm.zip} onChange={(e) => setAddrForm({ ...addrForm, zip: e.target.value.replace(/\D/g, '') })} placeholder="16143" className={inputCls() + ' h-10'} />}
+                            </Field>
+                          </div>
+                          <div className="mt-1 flex gap-2">
+                            <Button size="sm" variant="primary" loading={savingProfile} onClick={handleSaveAddress}>
+                              Simpan Alamat
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditingAddr(false)}>
+                              Batal
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {r.k === 'trx' && (
+                    <div className="flex flex-col gap-2">
+                      {loadingTrx ? (
+                        <p className="text-xs text-muted">Memuat riwayat transaksi...</p>
+                      ) : trxList.length === 0 ? (
+                        <p className="text-[13px] text-muted">Belum ada riwayat transaksi pengiriman ekspedisi.</p>
+                      ) : (
+                        trxList.map((t) => (
+                          <div key={t.id} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white p-3 text-[13px]">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-ink">
+                                {rupiah(t.amount)} • Ongkir #{t.report_code}
+                              </p>
+                              <p className="truncate text-xs text-muted">
+                                {t.item} • {t.courier} {t.awb ? `(${t.awb})` : ''}
+                              </p>
+                              <p className="text-[11px] text-soft">{t.date}</p>
+                            </div>
+                            <Badge tone="success">{t.status === 'selesai' ? 'Selesai' : 'Lunas'}</Badge>
+                            <button
+                              aria-label="Hapus riwayat transaksi"
+                              onClick={() => handleDeleteTransaction(t.id)}
+                              className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"
+                            >
+                              <Trash2 className="size-4" aria-hidden />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                   {r.k === 'privacy' && <p className="text-[13px] leading-5">Data pribadi diproses sesuai UU No. 27/2022 tentang Pelindungan Data Pribadi. Foto KTP dihapus otomatis setelah proses klaim selesai; NIK selalu disamarkan.</p>}
                 </div>
               )}
             </li>
           ))}
         </ul>
-        <button onClick={expireSession} className="min-h-10 rounded-xl border border-dashed border-[#b9c7d0] text-[11px] font-semibold text-muted hover:bg-white">
-          Simulasi: sesi berakhir
-        </button>
         <Button variant="outline" size="lg" full icon={LogOut} onClick={logout}>
           Keluar
         </Button>

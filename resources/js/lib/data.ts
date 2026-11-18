@@ -200,6 +200,15 @@ export type Claim = {
   id?: number
   no: string
   reporter: string
+  reporterFull?: string
+  reporterContact?: string
+  nik?: string | null
+  ktpPhoto?: string | null
+  referencePhoto?: string | null
+  route?: string
+  incidentTime?: string
+  position?: string
+  category?: string
   item: string
   itemCode: string
   submitted: string

@@ -34,12 +34,7 @@ class AuthController
 
         return response()->json([
             'token' => ResolveTabToken::createToken($user),
-            'user'  => [
-                'name'    => explode(' ', $user->name)[0],
-                'full'    => $user->name,
-                'contact' => $user->email ?? $user->phone,
-                'nik'     => null,
-            ],
+            'user'  => $this->mapUser($user),
         ]);
     }
 
@@ -74,12 +69,7 @@ class AuthController
 
         return response()->json([
             'token' => ResolveTabToken::createToken($user),
-            'user'  => [
-                'name'    => explode(' ', $user->name)[0],
-                'full'    => $user->name,
-                'contact' => $contact,
-                'nik'     => null,
-            ],
+            'user'  => $this->mapUser($user),
         ], 201);
     }
 
@@ -104,12 +94,7 @@ class AuthController
 
         return response()->json([
             'token' => ResolveTabToken::createToken($user),
-            'user'  => [
-                'name'    => explode(' ', $user->name)[0],
-                'full'    => $user->name,
-                'contact' => $user->email ?? $user->phone,
-                'nik'     => null,
-            ],
+            'user'  => $this->mapUser($user),
         ]);
     }
 
@@ -136,12 +121,91 @@ class AuthController
 
         return response()->json([
             'token' => ResolveTabToken::createToken($user),
-            'user'  => [
-                'name'    => explode(' ', $user->name)[0],
-                'full'    => $user->name,
-                'contact' => $user->phone,
-                'nik'     => null,
-            ],
+            'user'  => $this->mapUser($user),
         ]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'name'     => 'nullable|string|max:100',
+            'nik'      => 'nullable|string|max:20',
+            'address'  => 'nullable|array',
+            'password' => 'nullable|string|min:8',
+        ]);
+
+        if ($request->filled('name')) {
+            $user->name = $request->input('name');
+        }
+        if ($request->has('nik')) {
+            $user->nik = $request->input('nik');
+        }
+        if ($request->has('address')) {
+            $user->address = $request->input('address');
+        }
+        if ($request->filled('password')) {
+            $user->password = $request->input('password');
+        }
+
+        $user->save();
+
+        return response()->json([
+            'user' => $this->mapUser($user->fresh()),
+        ]);
+    }
+
+    public function transactions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $basts = \App\Models\BastPengambilan::with(['klaim.laporan.items'])
+            ->where('metode_ambil', 'ekspedisi')
+            ->whereHas('klaim.laporan', fn ($q) => $q->where('user_id', $user->id))
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($b) {
+                $lap = $b->klaim?->laporan;
+                $item = $lap?->items?->first();
+
+                return [
+                    'id'          => $b->id,
+                    'bast_code'   => $b->kode,
+                    'report_code' => $lap?->kode ?? '-',
+                    'item'        => $item?->nama_barang ?? 'Barang Temuan',
+                    'courier'     => $b->kurir ?? 'KAI Logistik Express',
+                    'amount'      => $b->ongkir ?? 25500,
+                    'status'      => $b->status_bayar ?? 'lunas',
+                    'awb'         => $b->nomor_resi,
+                    'address'     => $b->alamat_kirim,
+                    'date'        => $b->created_at?->format('j M Y, H:i') ?? '',
+                ];
+            });
+
+        return response()->json($basts);
+    }
+
+    public function deleteTransaction(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+
+        $bast = \App\Models\BastPengambilan::whereHas('klaim.laporan', fn ($q) => $q->where('user_id', $user->id))
+            ->findOrFail($id);
+
+        $bast->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function mapUser(User $user): array
+    {
+        return [
+            'name'    => explode(' ', $user->name)[0],
+            'full'    => $user->name,
+            'contact' => $user->email ?? $user->phone,
+            'nik'     => $user->nik,
+            'address' => $user->address,
+        ];
     }
 }

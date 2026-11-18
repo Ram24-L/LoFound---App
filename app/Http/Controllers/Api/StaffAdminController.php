@@ -35,11 +35,44 @@ class StaffAdminController extends Controller
                     'email'   => $u->email,
                     'role'    => $roleLabels[$u->role] ?? $u->role,
                     'station' => $u->stasiun?->nama ?? 'Pusat',
-                    'active'  => true,
+                    'active'  => (bool) ($u->active ?? true),
                 ];
             });
 
         return response()->json($users);
+    }
+
+    /**
+     * PATCH /api/staff/admin/users/{id}
+     */
+    public function updateUser(Request $request, int $id)
+    {
+        $user = User::findOrFail($id);
+
+        if ($request->has('active')) {
+            $user->active = $request->boolean('active');
+            $act = $user->active ? 'Aktifkan staf' : 'Nonaktifkan staf';
+            AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', $act, $user->email);
+        }
+
+        if ($request->filled('name')) {
+            $user->name = $request->input('name');
+        }
+
+        if ($request->filled('station')) {
+            if ($request->station === 'Pusat') {
+                $user->stasiun_id = null;
+            } else {
+                $st = Stasiun::where('nama', $request->station)->first();
+                if ($st) {
+                    $user->stasiun_id = $st->id;
+                }
+            }
+        }
+
+        $user->save();
+
+        return response()->json(['ok' => true]);
     }
 
     /**
@@ -163,6 +196,12 @@ class StaffAdminController extends Controller
         if ($request->has('shippable')) {
             $cat->shippable = $request->boolean('shippable');
         }
+        if ($request->has('active')) {
+            $cat->active = $request->boolean('active');
+        }
+        if ($request->filled('icon')) {
+            $cat->ikon = $request->input('icon');
+        }
         $cat->save();
 
         return response()->json(['ok' => true]);
@@ -173,17 +212,111 @@ class StaffAdminController extends Controller
      */
     public function stations()
     {
-        $st = Stasiun::orderBy('nama')->get()->map(function ($s, $i) {
+        $st = Stasiun::orderBy('id')->get()->map(function ($s) {
             return [
+                'id'     => $s->id,
                 'code'   => $s->kode,
                 'name'   => $s->nama,
                 'line'   => $s->lin,
-                'hours'  => '04:00–24:00',
-                'active' => $i !== 11,
+                'hours'  => $s->jam_layanan ?? '04:00–24:00',
+                'active' => (bool) ($s->active ?? true),
             ];
         });
 
         return response()->json($st);
+    }
+
+    /**
+     * POST /api/staff/admin/stations
+     */
+    public function storeStation(Request $request)
+    {
+        $request->validate([
+            'code'  => 'required|string|max:10|unique:stasiun,kode',
+            'name'  => 'required|string|max:100',
+            'line'  => 'required|string|max:100',
+            'hours' => 'nullable|string|max:30',
+        ]);
+
+        $s = Stasiun::create([
+            'kode'        => strtoupper(trim($request->code)),
+            'nama'        => trim($request->name),
+            'lin'         => trim($request->line),
+            'jam_layanan' => $request->input('hours', '04:00–24:00'),
+            'active'      => $request->boolean('active', true),
+        ]);
+
+        AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Tambah stasiun baru', "{$s->kode} • St. {$s->nama}");
+
+        return response()->json([
+            'station' => [
+                'id'     => $s->id,
+                'code'   => $s->kode,
+                'name'   => $s->nama,
+                'line'   => $s->lin,
+                'hours'  => $s->jam_layanan,
+                'active' => (bool) $s->active,
+            ],
+        ]);
+    }
+
+    /**
+     * PATCH /api/staff/admin/stations/{id}
+     */
+    public function updateStation(Request $request, int $id)
+    {
+        $s = Stasiun::findOrFail($id);
+
+        if ($request->filled('code')) {
+            $s->kode = strtoupper(trim($request->code));
+        }
+        if ($request->filled('name')) {
+            $s->nama = trim($request->name);
+        }
+        if ($request->filled('line')) {
+            $s->lin = trim($request->line);
+        }
+        if ($request->filled('hours')) {
+            $s->jam_layanan = trim($request->hours);
+        }
+        if ($request->has('active')) {
+            $s->active = $request->boolean('active');
+        }
+        $s->save();
+
+        AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Ubah data stasiun', "{$s->kode} • St. {$s->nama}");
+
+        return response()->json([
+            'station' => [
+                'id'     => $s->id,
+                'code'   => $s->kode,
+                'name'   => $s->nama,
+                'line'   => $s->lin,
+                'hours'  => $s->jam_layanan ?? '04:00–24:00',
+                'active' => (bool) $s->active,
+            ],
+        ]);
+    }
+
+    /**
+     * DELETE /api/staff/admin/stations/{id}
+     */
+    public function deleteStation(Request $request, int $id)
+    {
+        $s = Stasiun::findOrFail($id);
+        $code = $s->kode;
+        $name = $s->nama;
+
+        try {
+            $s->delete();
+            AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Hapus stasiun', "{$code} • St. {$name}");
+            return response()->json(['deleted' => true]);
+        } catch (\Exception) {
+            // If referenced by foreign keys, hide/deactivate instead
+            $s->update(['active' => false]);
+            AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Nonaktifkan stasiun (terpakai)', "{$code} • St. {$name}");
+            return response()->json(['deleted' => false, 'deactivated' => true]);
+        }
     }
 
     /**

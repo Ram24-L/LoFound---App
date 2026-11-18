@@ -11,7 +11,7 @@ class KlaimVerifikasi extends Model
     protected $table = 'klaim_verifikasi';
 
     protected $fillable = [
-        'kode', 'laporan_id', 'barang_temuan_id', 'jawaban_rahasia',
+        'kode', 'laporan_id', 'barang_temuan_id', 'jawaban_rahasia', 'nik',
         'bukti_tambahan', 'status_verifikasi', 'verified_by', 'catatan_cs',
     ];
 

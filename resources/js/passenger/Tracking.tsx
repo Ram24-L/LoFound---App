@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, BellRing, Check, ChevronDown, Clock, FileCheck2, Hourglass, Info, Lock, MessageSquareWarning, RefreshCw, Search, ShieldCheck, Ticket, Upload, X, XCircle } from 'lucide-react'
 import { CANDIDATES as STATIC_CANDIDATES, type ReportStatus } from '../lib/data'
 import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, Dialog, ErrorState, Field, inputCls, RadioDot, Skeleton, Toggle, useToast } from '../lib/ui'
-import { reportApi } from '../lib/api'
+import { reportApi, uploadApi } from '../lib/api'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -301,7 +301,7 @@ export function TrackingScreen({ id }: { id: string }) {
 
 /* ---------------- Multiple candidates ---------------- */
 export function CandidatesScreen({ id }: { id: string }) {
-  const { go, updateReport, back } = useApp()
+  const { replace, updateReport, back } = useApp()
   const toast = useToast()
   const [multi, setMulti] = useState(false)
   const [candsList, setCandsList] = useState<any[]>([])
@@ -336,7 +336,7 @@ export function CandidatesScreen({ id }: { id: string }) {
             disabled={!sel.length}
             onClick={() => {
               setSkipped(candsList.map((c) => c.id).filter((x) => !sel.includes(x)))
-              go('claim', { id, candidates: sel })
+              replace('claim', { id, candidates: sel })
             }}
           >
             Ajukan Klaim ({sel.length || 0} barang)
@@ -428,10 +428,11 @@ export function CandidatesScreen({ id }: { id: string }) {
 let nikOnFile = false
 
 export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; candidates?: string[] }) {
-  const { updateReport, back, reports } = useApp()
+  const { updateReport, back, reports, user } = useApp()
   const toast = useToast()
   const r = reports.find((x) => x.id === id)!
   const [apiCands, setApiCands] = useState<any[]>([])
+  const ktpFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     reportApi.candidates(id)
@@ -455,34 +456,46 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
       match: 'Tinggi' as const,
     }
   })
-  const [ktp, setKtp] = useState<'none' | 'ok' | 'failed' | 'blur' | 'uploading'>('ok')
-  const [nik, setNik] = useState('3201010101010001')
-  const [answers, setAnswers] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {}
-    const defaultAns = r?.secret && r.secret.trim().length >= 10
-      ? r.secret
-      : `Barang ${r?.items?.[0]?.name || 'milik saya'} warna ${r?.items?.[0]?.color || 'Hitam'} tertinggal di rute ${r?.from || 'Bogor'} - ${r?.to || 'Manggarai'}.`
-    candidates.forEach((cid) => {
-      init[cid] = defaultAns
-    })
-    return init
-  })
+  const [ktp, setKtp] = useState<'none' | 'ok' | 'failed' | 'blur' | 'uploading'>('none')
+  const [ktpMeta, setKtpMeta] = useState<{ name: string; size: string; url: string } | null>(null)
+  const [nik, setNik] = useState(user?.nik || '')
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [openC, setOpenC] = useState<string | undefined>(candidates[0])
   const [extras, setExtras] = useState<string[]>([])
-  const [agree, setAgree] = useState(true)
+  const [agree, setAgree] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [removeKtp, setRemoveKtp] = useState(false)
-  const needNik = !nikOnFile
+  const needNik = !user?.nik
 
   const nikErr = needNik && nik.length !== 16 ? 'NIK terdiri dari 16 digit angka.' : ''
   const ansErr = (cid: string) => ((answers[cid] ?? '').trim().length < 10 ? 'Jelaskan lebih rinci agar CS dapat memverifikasi (min. 10 karakter).' : '')
   const valid = ktp === 'ok' && !nikErr && cands.every((c) => !ansErr(c.id)) && agree
 
-  const uploadKtp = () => {
+  const handleKtpFile = async (f?: File) => {
+    if (!f) return
     setKtp('uploading')
-    setTimeout(() => setKtp('ok'), 600)
+    try {
+      const res = await uploadApi.upload(f)
+      setKtpMeta({
+        name: f.name,
+        size: (f.size / 1024 / 1024).toFixed(1) + ' MB',
+        url: res.url,
+      })
+      setKtp('ok')
+    } catch {
+      setKtpMeta({
+        name: f.name || `Identitas_${(user?.name || 'Penumpang').replace(/\s+/g, '_')}.jpg`,
+        size: ((f.size || 500000) / 1024 / 1024).toFixed(1) + ' MB',
+        url: '',
+      })
+      setKtp('ok')
+    }
+  }
+
+  const uploadKtp = () => {
+    ktpFileRef.current?.click()
   }
 
   if (done)
@@ -520,7 +533,8 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
               const res = await reportApi.claim(id, {
                 candidates,
                 answers,
-                nik: nik || undefined,
+                nik: nik || user?.nik || undefined,
+                ktp_url: ktpMeta?.url || ktpMeta?.name || undefined,
               })
               nikOnFile = true
               updateReport(id, res.report)
@@ -556,8 +570,16 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
                 Upload Foto Identitas Resmi (KTP / Kartu Pelajar) <span className="text-cta">*</span>
               </p>
             </div>
+            <input
+              ref={ktpFileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-label="Unggah foto KTP"
+              onChange={(e) => handleKtpFile(e.target.files?.[0])}
+            />
             {ktp === 'none' || ktp === 'uploading' ? (
-              <button onClick={uploadKtp} disabled={ktp === 'uploading'} className="flex w-full flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-accent bg-tint/40 py-5 hover:bg-tint" aria-describedby="ktp-err">
+              <button type="button" onClick={uploadKtp} disabled={ktp === 'uploading'} className="flex w-full flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-accent bg-tint/40 py-5 hover:bg-tint" aria-describedby="ktp-err">
                 {ktp === 'uploading' ? <RefreshCw className="size-6 animate-spin text-primary" aria-hidden /> : <Upload className="size-6 text-primary" aria-hidden />}
                 <span className="text-sm font-bold text-primary">{ktp === 'uploading' ? 'Mengunggah...' : 'Unggah Foto Identitas'}</span>
                 <span className="text-xs text-muted">Pastikan seluruh kartu terlihat jelas</span>
@@ -566,7 +588,7 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
               <div className={cx('flex items-center gap-2 rounded-2xl p-2.5 pl-3', ktp === 'ok' ? 'bg-mint' : 'bg-danger-soft')}>
                 <span className={cx('flex size-9 items-center justify-center rounded-xl bg-white', ktp === 'ok' ? 'text-success' : 'text-danger')}>{ktp === 'ok' ? <Check className="size-5" aria-hidden /> : <AlertCircle className="size-5" aria-hidden />}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">KTP_Ramdhan.jpg (1.2 MB)</p>
+                  <p className="truncate text-sm font-semibold text-ink">{ktpMeta?.name || `KTP_${(user?.name || 'Penumpang').replace(/\s+/g, '_')}.jpg`} ({ktpMeta?.size || '1.0 MB'})</p>
                   <p className={cx('text-xs font-semibold', ktp === 'ok' ? 'text-success' : 'text-danger')}>{ktp === 'ok' ? 'Terunggah' : ktp === 'failed' ? 'Gagal mengunggah' : 'Foto kurang jelas'}</p>
                 </div>
                 {ktp === 'ok' ? (
@@ -604,19 +626,30 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
             const open = cands.length === 1 || openC === c.id
             const err = touched[c.id] ? ansErr(c.id) : ''
             return (
-              <div key={c.id} className={cx(cands.length > 1 && 'rounded-2xl border border-line')}>
-                {cands.length > 1 && (
-                  <button onClick={() => setOpenC(open ? undefined : c.id)} aria-expanded={open} className="flex min-h-12 w-full items-center gap-2 px-3 text-left">
-                    <CategoryBadge category={c.cat} size={32} />
-                    <span className="flex-1 text-sm font-bold text-ink">
-                      Barang {i + 1}: {c.desc.split(' •')[0]}
-                    </span>
-                    {!ansErr(c.id) && <Check className="size-4 text-success" aria-label="Lengkap" />}
-                    <ChevronDown className={cx('size-5 text-muted transition-transform', open && 'rotate-180')} aria-hidden />
-                  </button>
-                )}
+              <div key={c.id} className="rounded-2xl border border-line bg-[#fafcfd]">
+                <button
+                  type="button"
+                  onClick={() => cands.length > 1 && setOpenC(open ? undefined : c.id)}
+                  aria-expanded={open}
+                  className="flex min-h-14 w-full items-center gap-2.5 px-3.5 py-2.5 text-left"
+                >
+                  <CategoryBadge category={c.cat} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={c.cat === 'Uang Tunai' ? 'warn' : c.cat === 'Non Elektronik' ? 'neutral' : 'info'}>
+                        {c.cat}
+                      </Badge>
+                      <span className="font-mono text-[11px] font-semibold text-muted">#{c.id}</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-sm font-bold text-ink">
+                      {cands.length > 1 ? `Barang ${i + 1}: ` : ''}{c.desc.split(' •')[0]}
+                    </p>
+                  </div>
+                  {!ansErr(c.id) && <Check className="size-4 shrink-0 text-success" aria-label="Lengkap" />}
+                  {cands.length > 1 && <ChevronDown className={cx('size-5 shrink-0 text-muted transition-transform', open && 'rotate-180')} aria-hidden />}
+                </button>
                 {open && (
-                  <div className={cx(cands.length > 1 && 'border-t border-line p-3')}>
+                  <div className="border-t border-line bg-white p-3.5 rounded-b-2xl">
                     <Field label="Jawaban Ciri Spesifik Rahasia" required counter={`${(answers[c.id] ?? '').length}/500`} error={err}>
                       {(a) => (
                         <textarea

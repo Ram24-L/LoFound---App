@@ -487,11 +487,16 @@ class ReportController
             'answers'          => 'required|array',
             'answers.*'        => 'required|string|min:10',
             'nik'              => 'nullable|string|size:16',
+            'ktp_url'          => 'nullable|string',
         ]);
 
         $laporan = LaporanBarangHilang::where('kode', $kode)
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
+
+        if ($request->filled('nik')) {
+            $request->user()->update(['nik' => $request->input('nik')]);
+        }
 
         $createdKlaim = null;
 
@@ -529,6 +534,8 @@ class ReportController
                     'laporan_id'        => $laporan->id,
                     'barang_temuan_id'  => $barangTemuanId,
                     'jawaban_rahasia'   => $request->input("answers.{$fndKode}", ''),
+                    'nik'               => $request->input('nik') ?: $request->user()->nik,
+                    'bukti_tambahan'    => $request->input('ktp_url'),
                     'status_verifikasi' => 'menunggu',
                 ]);
             }

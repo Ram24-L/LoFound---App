@@ -1,4 +1,3 @@
-import { ShieldCheck, User } from 'lucide-react'
 import { ToastProvider } from './lib/ui'
 import { PassengerApp } from './passenger/PassengerApp'
 import { StaffApp } from './staff/StaffApp'
@@ -24,26 +23,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating Demo Switcher for fast cross-role demo */}
-      <aside aria-label="Demo Role Switcher" className="fixed bottom-5 right-5 z-50">
-        <a
-          href={isStaff ? '/' : '/staff'}
-          className="flex items-center gap-2 rounded-full border border-white/20 bg-ink px-4 py-2.5 text-xs font-bold text-white shadow-2xl transition-transform hover:scale-105 hover:bg-ink/90"
-        >
-          {isStaff ? (
-            <>
-              <User className="size-4 text-accent" aria-hidden />
-              <span>Buka App Penumpang (/)</span>
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="size-4 text-coral" aria-hidden />
-              <span>Buka Konsol Petugas (/staff)</span>
-            </>
-          )}
-        </a>
-      </aside>
     </>
   )
 }

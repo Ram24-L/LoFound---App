@@ -21,6 +21,15 @@ const MENUS: Record<Role, { p: Page; l: string; icon: typeof Package; badge?: nu
     { p: 'audit', l: 'Log Audit', icon: FileClock },
   ],
   manager: [{ p: 'dashboard', l: 'Dashboard Eksekutif', icon: LayoutDashboard }],
+  debug: [
+    { p: 'inventory', l: 'Inventaris Barang', icon: Package },
+    { p: 'claims', l: 'Antrian Klaim', icon: ClipboardCheck, badge: 2 },
+    { p: 'handover', l: 'Serah Terima', icon: QrCode },
+    { p: 'shipping', l: 'Antrian Pengiriman', icon: Truck, badge: 1 },
+    { p: 'master', l: 'Data Master', icon: Database },
+    { p: 'audit', l: 'Log Audit', icon: FileClock },
+    { p: 'dashboard', l: 'Dashboard Eksekutif', icon: LayoutDashboard },
+  ],
 }
 const TITLES: Record<Page, string> = {
   inventory: 'Inventaris Barang',
@@ -68,17 +77,17 @@ export function StaffApp() {
   }
 
   useEffect(() => {
-    if (role === 'cs' || role === 'admin' || role === 'manager') {
+    if (role === 'cs' || role === 'admin' || role === 'manager' || role === 'debug') {
       refreshDashboard()
     }
 
     const handleFocus = () => {
-      if (role === 'cs' || role === 'admin' || role === 'manager') refreshDashboard()
+      if (role === 'cs' || role === 'admin' || role === 'manager' || role === 'debug') refreshDashboard()
     }
     window.addEventListener('focus', handleFocus)
 
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible' && (role === 'cs' || role === 'admin' || role === 'manager')) {
+      if (document.visibilityState === 'visible' && (role === 'cs' || role === 'admin' || role === 'manager' || role === 'debug')) {
         refreshDashboard()
       }
     }, 3000)
@@ -110,7 +119,7 @@ export function StaffApp() {
   }
 
   const nav = (p: Page, pr: Record<string, any> = {}) => {
-    const allowed = MENUS[role].some((m) => m.p === p) || (p === 'item' && (role === 'cs' || role === 'admin'))
+    const allowed = MENUS[role].some((m) => m.p === p) || (p === 'item' && (role === 'cs' || role === 'admin' || role === 'debug'))
     setParams(pr)
     setPage(allowed ? p : 'forbidden')
   }
@@ -264,7 +273,7 @@ export function StaffApp() {
 }
 
 function StaffLogin({ onLogin }: { onLogin: (u: StaffUser) => void }) {
-  const [email, setEmail] = useState('petugascs@kci.id')
+  const [email, setEmail] = useState('debug@kci.id')
   const [pw, setPw] = useState('lofound2026')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -303,8 +312,8 @@ function StaffLogin({ onLogin }: { onLogin: (u: StaffUser) => void }) {
             <p className="text-sm text-muted">Hak akses (RBAC) otomatis disesuaikan berdasarkan akun email dinas Anda.</p>
           </div>
           {err && <Banner tone="danger">{err}</Banner>}
-          <Field label="Email Dinas" helper="Format role: petugascs@kci.id • petugaslogistik@kci.id • admin@kci.id • kepalastasiun@kci.id">
-            {(a) => <input {...a} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="petugascs@kci.id" className={inputCls() + ' h-12'} />}
+          <Field label="Email Dinas" helper="Role: debug@kci.id (All Access) • petugascs@kci.id • petugaslogistik@kci.id • admin@kci.id • kepalastasiun@kci.id">
+            {(a) => <input {...a} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="debug@kci.id" className={inputCls() + ' h-12'} />}
           </Field>
           <Field label="Kata Sandi" helper="Default sandi dinas: lofound2026">
             {(a) => (

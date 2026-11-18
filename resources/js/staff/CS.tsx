@@ -604,10 +604,26 @@ export function ClaimsPage() {
   const [open, setOpen] = useState<Claim | null>(null)
   const count = (t: Claim['tab']) => claims.filter((c) => c.tab === t).length
   const list = claims.filter((c) => c.tab === tab)
+  const withKtpCount = claims.filter((c) => !!c.ktpPhoto).length
+  const urgentCount = claims.filter((c) => c.tab !== 'selesai' && c.slaMin <= 60).length
 
   return (
     <>
       <PageHead title="Antrian Klaim" sub="Verifikasi buta: cocokkan jawaban penumpang dengan data gudang tanpa memperlihatkan foto ke publik." />
+      <div className="mb-4 grid grid-cols-4 gap-3">
+        {[
+          { label: 'Total Antrian Klaim', val: claims.length, sub: `${count('baru')} klaim baru masuk`, tone: 'text-primary' },
+          { label: 'Perlu Verifikasi Segera', val: count('baru') + count('ditinjau'), sub: `${urgentCount} mendekati batas SLA`, tone: 'text-coral' },
+          { label: 'Dokumen & KTP Terunggah', val: withKtpCount, sub: 'Siap dicek identitas & foto', tone: 'text-ink' },
+          { label: 'Klaim Selesai Diverifikasi', val: count('selesai'), sub: 'BAST telah diterbitkan', tone: 'text-success' },
+        ].map((s) => (
+          <div key={s.label} className="rounded-2xl border border-line bg-white p-4">
+            <p className="text-xs font-semibold text-muted">{s.label}</p>
+            <p className={cx('mt-1 text-2xl font-extrabold tabular-nums', s.tone)}>{s.val}</p>
+            <p className="mt-0.5 text-[11px] text-muted">{s.sub}</p>
+          </div>
+        ))}
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs
           value={tab}
@@ -659,7 +675,7 @@ export function ClaimsPage() {
                 <th className={th + ' w-12'}>
                   <span className="sr-only">Pilih</span>
                 </th>
-                {['No. Klaim', 'Pelapor', 'Barang', 'Diajukan', 'Sisa SLA', 'Ditangani Oleh', 'Aksi'].map((h) => (
+                {['No. Klaim', 'Pelapor', 'Kategori', 'Barang', 'Diajukan', 'Sisa SLA', 'Ditangani Oleh', 'Aksi'].map((h) => (
                   <th key={h} className={th}>
                     {h}
                   </th>
@@ -678,6 +694,14 @@ export function ClaimsPage() {
                   </td>
                   <td className={td}>{c.reporter}</td>
                   <td className={td}>
+                    <div className="flex items-center gap-2">
+                      <CategoryBadge category={c.category || 'Elektronik'} size={28} />
+                      <Badge tone={c.category === 'Uang Tunai' ? 'warn' : c.category === 'Non Elektronik' ? 'neutral' : 'info'}>
+                        {c.category || 'Elektronik'}
+                      </Badge>
+                    </div>
+                  </td>
+                  <td className={td}>
                     {c.item} <span className="text-muted">• {c.itemCode}</span>
                   </td>
                   <td className={td + ' text-muted'}>{c.submitted}</td>
@@ -694,7 +718,7 @@ export function ClaimsPage() {
                         setOpen(c)
                       }}
                     >
-                      {c.tab === 'selesai' ? 'Lihat' : c.handler === 'Anda' ? 'Lanjutkan' : 'Ambil Klaim'}
+                      Lihat Detail Klaim
                     </Button>
                   </td>
                 </tr>
@@ -715,7 +739,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
   const toast = useToast()
   const item: InvItem = inventory.find((i) => i.code === claim.itemCode) ?? {
     code: claim.itemCode || claim.no,
-    cat: 'Elektronik',
+    cat: claim.category || 'Elektronik',
     name: claim.item,
     color: 'Hitam',
     station: claim.itemCode?.replace('St. ', '') || 'Manggarai',
@@ -822,17 +846,90 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
         <div className="grid grid-cols-[1fr_260px_1fr] gap-4">
           <section className="rounded-2xl border-2 border-primary bg-white p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
-              <UserCheck className="size-4 text-primary" aria-hidden /> Data Pelapor & Jawaban Rahasia
+              <UserCheck className="size-4 text-primary" aria-hidden /> Detail Klaim, Dokumen & Jawaban Penumpang
             </h3>
-            <dl className="flex flex-col gap-2 text-[13px]">
-              <div>
-                <dt className="text-xs text-muted">Pelapor</dt>
-                <dd className="font-bold">{claim.reporter}</dd>
+            <dl className="flex flex-col gap-2.5 text-[13px]">
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#f6fafc] p-2.5">
+                <div>
+                  <dt className="text-[11px] text-muted">Pelapor</dt>
+                  <dd className="font-bold text-ink">{claim.reporterFull || claim.reporter}</dd>
+                  {claim.reporterContact && <dd className="text-[11px] text-muted">{claim.reporterContact}</dd>}
+                </div>
+                <div>
+                  <dt className="text-[11px] text-muted">NIK Identitas</dt>
+                  <dd className="font-mono font-bold text-ink">{claim.nik || 'Belum dicantumkan'}</dd>
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <dt className="text-xs text-muted">Kategori & Nama Barang</dt>
+                  <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 font-bold text-ink">
+                    <Badge tone={(claim.category || item?.cat) === 'Uang Tunai' ? 'warn' : (claim.category || item?.cat) === 'Non Elektronik' ? 'neutral' : 'info'}>
+                      {claim.category || item?.cat || 'Elektronik'}
+                    </Badge>
+                    <span>{claim.item}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Rute & Waktu Kejadian</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{claim.route || `St. ${item.station}`}</dd>
+                  <dd className="text-[11px] text-muted">{claim.incidentTime || claim.submitted} • {claim.position || 'Gerbong KRL'}</dd>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-line p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <dt className="text-[11px] font-semibold text-muted">Foto Identitas (KTP)</dt>
+                    <Badge tone={claim.ktpPhoto ? 'success' : 'neutral'}>{claim.ktpPhoto ? 'Terunggah' : 'Belum Ada'}</Badge>
+                  </div>
+                  {claim.ktpPhoto ? (
+                    claim.ktpPhoto.startsWith('/storage/') || claim.ktpPhoto.startsWith('http') ? (
+                      <a href={claim.ktpPhoto} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-line">
+                        <img src={claim.ktpPhoto} alt="KTP Penumpang" className="h-24 w-full object-cover hover:opacity-90" />
+                      </a>
+                    ) : (
+                      <div className="flex h-20 flex-col items-center justify-center rounded-lg bg-mint/60 px-2 text-center text-xs font-semibold text-success">
+                        <CheckCircle2 className="mb-1 size-4" aria-hidden />
+                        <span className="w-full truncate">{claim.ktpPhoto}</span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex h-20 items-center justify-center rounded-lg bg-[#f6fafc] text-[11px] text-muted">
+                      Belum mengunggah KTP
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-line p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <dt className="text-[11px] font-semibold text-muted">Foto Referensi Barang</dt>
+                    <Badge tone={claim.referencePhoto ? 'info' : 'neutral'}>{claim.referencePhoto ? 'Ada Foto' : 'Tidak Ada'}</Badge>
+                  </div>
+                  {claim.referencePhoto ? (
+                    claim.referencePhoto.startsWith('/storage/') || claim.referencePhoto.startsWith('http') ? (
+                      <a href={claim.referencePhoto} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-line">
+                        <img src={claim.referencePhoto} alt="Foto Referensi Penumpang" className="h-24 w-full object-cover hover:opacity-90" />
+                      </a>
+                    ) : (
+                      <div className="flex h-20 flex-col items-center justify-center rounded-lg bg-tint px-2 text-center text-xs font-semibold text-primary">
+                        <Camera className="mb-1 size-4" aria-hidden />
+                        <span className="w-full truncate">{claim.referencePhoto}</span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex h-20 items-center justify-center rounded-lg bg-[#f6fafc] text-[11px] text-muted">
+                      Tidak ada foto referensi
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <dt className="text-xs text-muted">Jawaban Ciri Rahasia Penumpang</dt>
-                <dd className="rounded-xl bg-tint p-2.5 leading-5 text-ink font-medium">
-                  {(claim as any).answer || 'Ada stiker NASA di pojok kanan bawah, wallpaper foto kucing oranye, sleeve hitam berisi charger.'}
+                <dd className="mt-1 rounded-xl bg-tint p-2.5 leading-5 text-ink font-medium">
+                  {claim.answer || 'Tidak ada catatan ciri rahasia tambahan.'}
                 </dd>
               </div>
             </dl>
@@ -918,14 +1015,21 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
 
 function WarehouseCard({ item }: { item?: InvItem }) {
   if (!item) return null
+  const secretPhoto = (item.secret as any)?.photo
   return (
     <section className="rounded-2xl bg-tint p-4">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
         <Lock className="size-4 text-primary" aria-hidden /> Data Rahasia Gudang
       </h3>
-      <div className="mb-3 flex h-28 items-center justify-center rounded-xl bg-white/80 text-xs font-semibold text-muted">
-        <Camera className="mr-1.5 size-4" aria-hidden /> Foto asli gudang
-      </div>
+      {secretPhoto && (secretPhoto.startsWith('/storage/') || secretPhoto.startsWith('http')) ? (
+        <a href={secretPhoto} target="_blank" rel="noreferrer" className="mb-3 block overflow-hidden rounded-xl border border-line bg-white">
+          <img src={secretPhoto} alt={item.name} className="h-28 w-full object-cover" />
+        </a>
+      ) : (
+        <div className="mb-3 flex h-28 items-center justify-center rounded-xl bg-white/80 text-xs font-semibold text-muted">
+          <Camera className="mr-1.5 size-4" aria-hidden /> Foto asli gudang ({item.code})
+        </div>
+      )}
       <dl className="flex flex-col gap-2 text-[13px]">
         <div>
           <dt className="text-xs text-muted">Catatan Rahasia CS</dt>

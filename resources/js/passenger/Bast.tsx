@@ -7,7 +7,7 @@ import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
 export function BastScreen({ id }: { id: string }) {
-  const { reports, go, updateReport, back, user } = useApp()
+  const { reports, replace, updateReport, back, user } = useApp()
   const toast = useToast()
   const r = reports.find((x) => x.id === id)!
   const [method, setMethod] = useState<'A' | 'B'>('B')
@@ -34,7 +34,7 @@ export function BastScreen({ id }: { id: string }) {
           size="lg"
           full
           onClick={async () => {
-            if (m === 'B') return go('shipping', { id })
+            if (m === 'B') return replace('shipping', { id })
             try {
               const res = await reportApi.bast(id, { method: 'stasiun' })
               if (res.qr) setQrCode(res.qr)
@@ -228,21 +228,25 @@ const COURIERS = [
 ]
 
 export function ShippingScreen({ id }: { id: string }) {
-  const { updateReport } = useApp()
+  const { reports, updateReport, back, user, login } = useApp()
   const toast = useToast()
+  const r = reports.find((x) => x.id === id)
   const [f, setF] = useState({ name: '', wa: '', addr: '', city: '', zip: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [courier, setCourier] = useState('KAI Logistik Express')
   const [insure, setInsure] = useState(true)
   const [pay, setPay] = useState<'qris' | 'ewallet'>('qris')
   const [phase, setPhase] = useState<'form' | 'paying' | 'pending' | 'paid'>('form')
-  const [mode, setMode] = useState<'normal' | 'pending' | 'fail' | 'resi' | 'area'>('normal')
+  const [mode] = useState<'normal' | 'pending' | 'fail' | 'resi' | 'area'>('normal')
   const [payErr, setPayErr] = useState('')
-  const [pkg, setPkg] = useState(0)
   const [countdown, setCountdown] = useState(23 * 3600 + 59 * 60 + 12)
   const c = COURIERS.find((x) => x.k === courier)!
   const total = c.price + (insure ? 5000 : 0) + 2500
   const shown = useAnimatedNumber(total)
+
+  // Real package status from backend (controlled by Petugas Logistik / Admin in /staff)
+  const realAwb = r?.awb || 'Menunggu input resi petugas logistik'
+  const pkgStep = r?.status === 'selesai' ? 2 : r?.awb ? 1 : 0
 
   useEffect(() => {
     if (phase !== 'pending') return
@@ -297,7 +301,14 @@ export function ShippingScreen({ id }: { id: string }) {
 
   if (phase === 'paid')
     return (
-      <Screen header={<TopBar title="Pembayaran Berhasil" sub={`#${id}`} />}>
+      <Screen
+        header={<TopBar title="Pembayaran Berhasil" sub={`#${id}`} />}
+        footer={
+          <Button variant="cta" size="lg" full onClick={back}>
+            Kembali ke Status Laporan
+          </Button>
+        }
+      >
         <div className="relative flex flex-col gap-4 overflow-hidden p-5">
           <Confetti />
           <section className="flex flex-col items-center gap-3 rounded-[20px] border border-[#c6efd8] bg-mint p-5 text-center">
@@ -305,38 +316,37 @@ export function ShippingScreen({ id }: { id: string }) {
               <Check className="size-9" strokeWidth={3} aria-hidden />
             </span>
             <Badge tone="success" className="bg-white">
-              LUNAS • Resi Terbit Otomatis
+              LUNAS • Terkirim ke Antrian Logistik
             </Badge>
             <p className="text-[22px] font-bold text-ink">{rupiah(total)}</p>
             <p className="text-xs text-muted">
               Dibayar via {pay === 'qris' ? 'QRIS / Virtual Account' : 'E-Wallet'} • {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
             </p>
-            <Button variant="outline" size="sm" icon={Download} onClick={() => toast('Resi_Bayar_LPR-2026-042.pdf diunduh.')}>
+            <Button variant="outline" size="sm" icon={Download} onClick={() => toast(`Resi_Bayar_${id}.pdf diunduh.`)}>
               Unduh Resi Bayar PDF
             </Button>
           </section>
           <section className="rounded-[20px] border border-line bg-white p-4">
             <p className="text-xs font-semibold text-muted">Nomor Resi Kurir • {courier}</p>
             <div className="mt-1 flex items-center gap-2">
-              <p className="flex-1 font-mono text-[17px] font-bold tracking-wide text-ink">KALOG-99283746ID</p>
-              <Button variant="tint" size="sm" icon={Copy} onClick={() => toast('Nomor resi disalin.')}>
-                Salin
-              </Button>
+              <p className="flex-1 font-mono text-[15px] font-bold tracking-wide text-ink">{realAwb}</p>
+              {r?.awb && (
+                <Button variant="tint" size="sm" icon={Copy} onClick={() => toast('Nomor resi disalin.')}>
+                  Salin
+                </Button>
+              )}
             </div>
             <ol className="mt-4 flex flex-col gap-3">
               {['Menunggu dijemput kurir', 'Dalam perjalanan', 'Tiba'].map((st, i) => (
                 <li key={st} className="flex items-center gap-3">
-                  <span className={cx('flex size-6 items-center justify-center rounded-full border-2', i < pkg ? 'border-success bg-success text-white' : i === pkg ? 'border-primary' : 'border-[#c4d3db]')}>
-                    {i < pkg ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : i === pkg ? <span className="size-2.5 rounded-full bg-primary" /> : null}
+                  <span className={cx('flex size-6 items-center justify-center rounded-full border-2', i < pkgStep ? 'border-success bg-success text-white' : i === pkgStep ? 'border-primary' : 'border-[#c4d3db]')}>
+                    {i < pkgStep ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : i === pkgStep ? <span className="size-2.5 rounded-full bg-primary" /> : null}
                   </span>
-                  <span className={cx('flex-1 text-sm', i <= pkg ? 'font-bold text-ink' : 'text-muted')}>{st}</span>
-                  {i === pkg && <Badge tone="info">Saat ini</Badge>}
+                  <span className={cx('flex-1 text-sm', i <= pkgStep ? 'font-bold text-ink' : 'text-muted')}>{st}</span>
+                  {i === pkgStep && <Badge tone="info">Saat ini</Badge>}
                 </li>
               ))}
             </ol>
-            <button onClick={() => setPkg((p) => (p + 1) % 3)} className="mt-3 min-h-9 w-full rounded-xl border border-dashed border-[#b9c7d0] text-[11px] font-semibold text-muted hover:bg-tint">
-              Simulasi: perbarui status paket
-            </button>
           </section>
         </div>
       </Screen>
@@ -377,9 +387,23 @@ export function ShippingScreen({ id }: { id: string }) {
         <section className="flex flex-col gap-4 rounded-[20px] border border-line bg-white p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[15px] font-bold text-ink">Alamat Penerima</h2>
-            <Button variant="ghost" size="sm" onClick={() => setF({ name: 'M. Ramdhan Maulana', wa: '081234567890', addr: 'Jl. Pajajaran No. 21, RT 03/RW 05', city: 'Bogor Tengah, Kota Bogor', zip: '16143' })}>
-              Gunakan alamat dari profil
-            </Button>
+            {user?.address?.addr && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setF({
+                    name: user.address?.name || user.full || '',
+                    wa: user.address?.wa || '',
+                    addr: user.address?.addr || '',
+                    city: user.address?.city || '',
+                    zip: user.address?.zip || '',
+                  })
+                }
+              >
+                Gunakan alamat tersimpan
+              </Button>
+            )}
           </div>
           {inp('name', 'Nama Penerima', 'Nama sesuai KTP', { autoComplete: 'name' })}
           {inp('wa', 'Nomor WhatsApp', '0812xxxxxxxx', { inputMode: 'tel' })}

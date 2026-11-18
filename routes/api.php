@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Route;
 // Public endpoints
 Route::get('/home-stats', [HomeController::class, 'stats']);
 Route::get('/home-feed', [HomeController::class, 'feed']);
-Route::get('/stations', fn () => Stasiun::orderBy('nama')->get(['id', 'kode', 'nama', 'lin']));
+Route::get('/stations', fn () => Stasiun::where('active', true)->orderBy('nama')->get(['id', 'kode', 'nama', 'lin', 'jam_layanan', 'active']));
 Route::get('/categories', fn () => KategoriBarang::where('active', true)->get(['id', 'nama', 'ikon', 'shippable']));
 Route::post('/upload', [UploadController::class, 'upload']);
 
@@ -36,6 +36,9 @@ Route::get('/auth/user', [AuthController::class, 'user']);
 
 // Protected passenger routes
 Route::middleware('auth')->group(function () {
+    Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::get('/transactions', [AuthController::class, 'transactions']);
+    Route::delete('/transactions/{id}', [AuthController::class, 'deleteTransaction']);
     Route::get('/reports', [ReportController::class, 'index']);
     Route::post('/reports', [ReportController::class, 'store']);
     Route::post('/reports/check-duplicate', [ReportController::class, 'checkDuplicate']);
@@ -83,10 +86,14 @@ Route::middleware('auth')->prefix('staff')->group(function () {
     Route::middleware('staff.role:admin,manager')->group(function () {
         Route::get('/admin/users', [StaffAdminController::class, 'users']);
         Route::post('/admin/users', [StaffAdminController::class, 'storeUser']);
+        Route::patch('/admin/users/{id}', [StaffAdminController::class, 'updateUser']);
         Route::get('/admin/categories', [StaffAdminController::class, 'categories']);
         Route::post('/admin/categories', [StaffAdminController::class, 'storeCategory']);
         Route::patch('/admin/categories/{id}', [StaffAdminController::class, 'updateCategory']);
         Route::get('/admin/stations', [StaffAdminController::class, 'stations']);
+        Route::post('/admin/stations', [StaffAdminController::class, 'storeStation']);
+        Route::patch('/admin/stations/{id}', [StaffAdminController::class, 'updateStation']);
+        Route::delete('/admin/stations/{id}', [StaffAdminController::class, 'deleteStation']);
         Route::get('/admin/audit-logs', [StaffAdminController::class, 'auditLogs']);
     });
 

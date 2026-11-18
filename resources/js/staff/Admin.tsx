@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Mail, Pencil, Plus, Search } from 'lucide-react'
+import { AlertTriangle, EyeOff, Mail, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { ADMIN_CATEGORIES, AUDIT, CATEGORIES, STAFF_USERS, STATIONS } from '../lib/data'
 import { Badge, Banner, Button, cx, iconLibrary, Field, inputCls, useToast } from '../lib/ui'
 import { Modal, PageHead, Panel, Tabs, td, th } from './common'
@@ -7,9 +7,17 @@ import { staffApi } from '../lib/api'
 
 function MiniSwitch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
-    <button role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} className="flex h-11 w-14 items-center disabled:opacity-40">
-      <span className={cx('relative h-6 w-11 rounded-full transition-colors', checked ? 'bg-success' : 'bg-[#cdd6dc]')}>
-        <span className={cx('absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+    <button
+      role="switch"
+      type="button"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="flex h-11 w-14 shrink-0 items-center justify-start disabled:opacity-40"
+    >
+      <span className={cx('relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors', checked ? 'bg-success' : 'bg-[#cdd6dc]')}>
+        <span className={cx('absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-5' : 'translate-x-0')} />
       </span>
     </button>
   )
@@ -18,9 +26,9 @@ function MiniSwitch({ checked, onChange, label, disabled }: { checked: boolean; 
 export function MasterDataPage() {
   const toast = useToast()
   const [tab, setTab] = useState<'cat' | 'st' | 'user'>('cat')
-  const [cats, setCats] = useState(ADMIN_CATEGORIES.map((c) => ({ ...c, icon: c.name })))
-  const [stations, setStations] = useState(STATIONS.map((s, i) => ({ ...s, hours: '04:00–24:00', active: i !== 11 })))
-  const [users, setUsers] = useState(STAFF_USERS)
+  const [cats, setCats] = useState<any[]>(ADMIN_CATEGORIES.map((c) => ({ ...c, icon: c.name })))
+  const [stations, setStations] = useState<any[]>(STATIONS.map((s, i) => ({ ...s, hours: '04:00–24:00', active: i !== 11 })))
+  const [users, setUsers] = useState<any[]>(STAFF_USERS)
   const [iconPick, setIconPick] = useState<string | null>(null)
   const [warn, setWarn] = useState<string | null>(null)
   const [addCat, setAddCat] = useState(false)
@@ -28,6 +36,17 @@ export function MasterDataPage() {
   const [addUser, setAddUser] = useState(false)
   const [nu, setNu] = useState({ name: '', email: '', role: 'Petugas CS', station: 'Jakarta Kota' })
   const [userErr, setUserErr] = useState('')
+
+  // Station CRUD state
+  const [stModal, setStModal] = useState<'add' | 'edit' | null>(null)
+  const [stForm, setStForm] = useState<{ id?: number; code: string; name: string; line: string; hours: string; active: boolean }>({
+    code: '',
+    name: '',
+    line: 'Lin Bogor',
+    hours: '04:00–24:00',
+    active: true,
+  })
+  const [stErr, setStErr] = useState('')
   const [busy, setBusy] = useState(false)
 
   // Fetch initial data from backend
@@ -60,7 +79,7 @@ export function MasterDataPage() {
     }
   }
 
-  const handleUpdateCategory = async (catItem: any, patch: { retention?: number; shippable?: boolean }) => {
+  const handleUpdateCategory = async (catItem: any, patch: { retention?: number; shippable?: boolean; active?: boolean; icon?: string }) => {
     try {
       if (catItem.id) {
         await staffApi.admin.updateCategory(catItem.id, patch)
@@ -69,6 +88,87 @@ export function MasterDataPage() {
       saved()
     } catch (error: any) {
       toast(error.message || 'Gagal update kategori.', { tone: 'danger' })
+    }
+  }
+
+  const handleSaveStation = async () => {
+    if (!stForm.code.trim() || !stForm.name.trim()) {
+      setStErr('Kode dan nama stasiun wajib diisi.')
+      return
+    }
+    setStErr('')
+    setBusy(true)
+    try {
+      if (stModal === 'edit' && stForm.id) {
+        const res = await staffApi.admin.updateStation(stForm.id, {
+          code: stForm.code.trim().toUpperCase(),
+          name: stForm.name.trim(),
+          line: stForm.line,
+          hours: stForm.hours,
+          active: stForm.active,
+        })
+        setStations((prev) => prev.map((x) => (x.id === stForm.id || x.code === stForm.code ? res.station : x)))
+        toast(`Stasiun St. ${res.station.name} diperbarui.`)
+      } else {
+        const res = await staffApi.admin.storeStation({
+          code: stForm.code.trim().toUpperCase(),
+          name: stForm.name.trim(),
+          line: stForm.line,
+          hours: stForm.hours,
+          active: stForm.active,
+        })
+        setStations((prev) => [...prev, res.station])
+        toast(`Stasiun baru St. ${res.station.name} ditambahkan ke PostgreSQL.`)
+      }
+      setStModal(null)
+    } catch (error: any) {
+      setStErr(error.message || 'Gagal menyimpan stasiun.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleToggleStation = async (st: any, active: boolean) => {
+    try {
+      if (st.id) {
+        await staffApi.admin.updateStation(st.id, { active })
+      }
+      setStations((prev) => prev.map((x) => (x.code === st.code ? { ...x, active } : x)))
+      toast(active ? `St. ${st.name} diaktifkan.` : `St. ${st.name} disembunyikan dari daftar penumpang.`)
+    } catch (error: any) {
+      toast(error.message || 'Gagal mengubah status stasiun.', { tone: 'danger' })
+    }
+  }
+
+  const handleDeleteStation = async (st: any) => {
+    try {
+      if (st.id) {
+        const res = await staffApi.admin.deleteStation(st.id)
+        if (res.deleted) {
+          setStations((prev) => prev.filter((x) => x.code !== st.code))
+          toast(`St. ${st.name} dihapus permanen.`)
+        } else {
+          setStations((prev) => prev.map((x) => (x.code === st.code ? { ...x, active: false } : x)))
+          toast(`St. ${st.name} sedang dipakai pada laporan, status diubah menjadi Non-aktif (Disembunyikan).`)
+        }
+      } else {
+        setStations((prev) => prev.filter((x) => x.code !== st.code))
+        toast(`St. ${st.name} dihapus.`)
+      }
+    } catch (error: any) {
+      toast(error.message || 'Gagal menghapus stasiun.', { tone: 'danger' })
+    }
+  }
+
+  const handleToggleUser = async (u: any, active: boolean) => {
+    try {
+      if (u.id) {
+        await staffApi.admin.updateUser(u.id, { active })
+      }
+      setUsers((prev) => prev.map((x) => (x.email === u.email ? { ...x, active } : x)))
+      toast(active ? `Akun ${u.name} diaktifkan.` : `Akun ${u.name} dinonaktifkan.`)
+    } catch (error: any) {
+      toast(error.message || 'Gagal mengubah status staf.', { tone: 'danger' })
     }
   }
 
@@ -112,7 +212,15 @@ export function MasterDataPage() {
               Tambah Staf
             </Button>
           ) : (
-            <Button variant="cta" icon={Plus} onClick={() => toast('Formulir stasiun baru dibuka.', { tone: 'info' })}>
+            <Button
+              variant="cta"
+              icon={Plus}
+              onClick={() => {
+                setStForm({ code: '', name: '', line: 'Lin Bogor', hours: '04:00–24:00', active: true })
+                setStErr('')
+                setStModal('add')
+              }}
+            >
               Tambah Stasiun
             </Button>
           )
@@ -199,7 +307,7 @@ export function MasterDataPage() {
                       <MiniSwitch
                         checked={c.active}
                         label={`Aktif ${c.name}`}
-                        onChange={(v) => setCats((cs) => cs.map((x, j) => (j === i ? { ...x, active: v } : x)))}
+                        onChange={(v) => handleUpdateCategory(c, { active: v })}
                       />
                     </td>
                     <td className={td + ' text-muted'}>{c.used} barang</td>
@@ -221,7 +329,7 @@ export function MasterDataPage() {
           <table className="w-full">
             <thead className="bg-[#f6fafc]">
               <tr>
-                {['Kode', 'Nama Stasiun', 'Lin KRL', 'Jam Layanan', 'Status'].map((h) => (
+                {['Kode', 'Nama Stasiun', 'Lin KRL', 'Jam Layanan', 'Tampil (Aktif)', 'Status', 'Aksi'].map((h) => (
                   <th key={h} className={th}>
                     {h}
                   </th>
@@ -229,14 +337,53 @@ export function MasterDataPage() {
               </tr>
             </thead>
             <tbody>
-              {stations.map((s, i) => (
-                <tr key={s.code} className="border-t border-line">
+              {stations.map((s) => (
+                <tr key={s.code} className={cx('border-t border-line', !s.active && 'bg-[#f7f9fa] text-muted')}>
                   <td className={td + ' font-mono font-bold'}>{s.code}</td>
                   <td className={td + ' font-bold'}>St. {s.name}</td>
                   <td className={td}><Badge tone="neutral">{s.line}</Badge></td>
                   <td className={td + ' text-muted'}>{s.hours}</td>
                   <td className={td}>
-                    <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'Aktif' : 'Non-aktif'}</Badge>
+                    <MiniSwitch
+                      checked={!!s.active}
+                      label={`Tampilkan Stasiun ${s.name}`}
+                      onChange={(v) => handleToggleStation(s, v)}
+                    />
+                  </td>
+                  <td className={td}>
+                    <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'Aktif' : 'Disembunyikan'}</Badge>
+                  </td>
+                  <td className={td}>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={Pencil}
+                        onClick={() => {
+                          setStForm({
+                            id: s.id,
+                            code: s.code,
+                            name: s.name,
+                            line: s.line,
+                            hours: s.hours || '04:00–24:00',
+                            active: !!s.active,
+                          })
+                          setStErr('')
+                          setStModal('edit')
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={Trash2}
+                        className="text-danger hover:bg-danger-soft"
+                        onClick={() => handleDeleteStation(s)}
+                      >
+                        Hapus
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -250,7 +397,7 @@ export function MasterDataPage() {
           <table className="w-full">
             <thead className="bg-[#f6fafc]">
               <tr>
-                {['Nama Staf', 'Email Kedinasan', 'Peran / Divisi', 'Stasiun Posko', 'Status'].map((h) => (
+                {['Nama Staf', 'Email Kedinasan', 'Peran / Divisi', 'Stasiun Posko', 'Aktif', 'Status'].map((h) => (
                   <th key={h} className={th}>
                     {h}
                   </th>
@@ -258,8 +405,8 @@ export function MasterDataPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u, i) => (
-                <tr key={u.email} className="border-t border-line">
+              {users.map((u) => (
+                <tr key={u.email} className={cx('border-t border-line', !u.active && 'bg-[#f7f9fa] text-muted')}>
                   <td className={td + ' font-bold'}>{u.name}</td>
                   <td className={td + ' font-mono text-muted'}>{u.email}</td>
                   <td className={td}>
@@ -267,9 +414,16 @@ export function MasterDataPage() {
                       {u.role}
                     </Badge>
                   </td>
-                  <td className={td}>{u.station ? `St. ${u.station}` : 'Pusat'}</td>
+                  <td className={td}>{u.station && u.station !== 'Pusat' ? `St. ${u.station}` : 'Pusat'}</td>
                   <td className={td}>
-                    <Badge tone="success">Aktif</Badge>
+                    <MiniSwitch
+                      checked={u.active !== false}
+                      label={`Aktifkan staf ${u.name}`}
+                      onChange={(v) => handleToggleUser(u, v)}
+                    />
+                  </td>
+                  <td className={td}>
+                    <Badge tone={u.active !== false ? 'success' : 'neutral'}>{u.active !== false ? 'Aktif' : 'Non-aktif'}</Badge>
                   </td>
                 </tr>
               ))}
@@ -277,6 +431,69 @@ export function MasterDataPage() {
           </table>
         </Panel>
       )}
+
+      <Modal
+        open={!!stModal}
+        onClose={() => setStModal(null)}
+        title={stModal === 'edit' ? `Ubah Stasiun St. ${stForm.name}` : 'Tambah Stasiun Baru'}
+        sub="Perubahan stasiun langsung tersimpan ke database PostgreSQL dan diperbarui di aplikasi penumpang."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setStModal(null)}>
+              Batal
+            </Button>
+            <Button variant="cta" disabled={!stForm.code.trim() || !stForm.name.trim() || busy} loading={busy} onClick={handleSaveStation}>
+              {stModal === 'edit' ? 'Simpan Perubahan' : 'Tambah Stasiun'}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Kode Stasiun (Singkatan)" required error={stErr}>
+            {(a) => (
+              <input
+                {...a}
+                maxLength={8}
+                value={stForm.code}
+                onChange={(e) => setStForm({ ...stForm, code: e.target.value.toUpperCase() })}
+                placeholder="Contoh: MRI / BOO"
+                className={inputCls(!!stErr) + ' h-11 font-mono uppercase'}
+              />
+            )}
+          </Field>
+          <Field label="Nama Stasiun" required>
+            {(a) => (
+              <input
+                {...a}
+                value={stForm.name}
+                onChange={(e) => setStForm({ ...stForm, name: e.target.value })}
+                placeholder="Contoh: Manggarai"
+                className={inputCls() + ' h-11'}
+              />
+            )}
+          </Field>
+          <Field label="Lin KRL">
+            {(a) => (
+              <select {...a} value={stForm.line} onChange={(e) => setStForm({ ...stForm, line: e.target.value })} className={inputCls() + ' h-11'}>
+                {['Lin Bogor', 'Lin Cikarang', 'Lin Rangkasbitung', 'Lin Tangerang', 'Lin Tanjung Priok'].map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field label="Jam Layanan Posko">
+            {(a) => (
+              <input
+                {...a}
+                value={stForm.hours}
+                onChange={(e) => setStForm({ ...stForm, hours: e.target.value })}
+                placeholder="04:00–24:00"
+                className={inputCls() + ' h-11'}
+              />
+            )}
+          </Field>
+        </div>
+      </Modal>
 
       <Modal
         open={addCat}

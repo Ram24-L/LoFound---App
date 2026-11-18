@@ -9,7 +9,14 @@ class Stasiun extends Model
 {
     protected $table = 'stasiun';
 
-    protected $fillable = ['kode', 'nama', 'lin'];
+    protected $fillable = ['kode', 'nama', 'lin', 'jam_layanan', 'active'];
+
+    protected function casts(): array
+    {
+        return [
+            'active' => 'boolean',
+        ];
+    }
 
     public function users(): HasMany
     {

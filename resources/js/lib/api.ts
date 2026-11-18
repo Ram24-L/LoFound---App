@@ -105,7 +105,22 @@ export const api = {
 
 import type { Claim, InvItem, Report, Shipment } from './data'
 
-export type AuthUser = { name: string; full: string; contact: string; nik?: string }
+export type SavedAddress = {
+  label?: string
+  name: string
+  wa: string
+  addr: string
+  city: string
+  zip: string
+}
+
+export type AuthUser = {
+  name: string
+  full: string
+  contact: string
+  nik?: string | null
+  address?: SavedAddress | null
+}
 
 export const authApi = {
   login: async (contact: string, password: string, remember = true) => {
@@ -135,6 +150,12 @@ export const authApi = {
     if (res.token) setTabToken('passenger', res.token)
     return res
   },
+  updateProfile: (data: { name?: string; nik?: string | null; address?: SavedAddress | null; password?: string }) =>
+    api.patch<{ user: AuthUser }>('/api/auth/profile', data),
+  transactions: () =>
+    api.get<Array<{ id: number; bast_code: string; report_code: string; item: string; courier: string; amount: number; status: string; awb?: string; address?: string; date: string }>>('/api/transactions'),
+  deleteTransaction: (id: number) =>
+    api.delete<{ ok: boolean }>(`/api/transactions/${id}`),
 }
 
 export const homeApi = {
@@ -180,7 +201,7 @@ export const reportApi = {
     api.post<{ report: Report }>('/api/reports/merge', { ids }),
   candidates: (kode: string) =>
     api.get<Array<{ id: string; cat: string; desc: string; found: string; posko: string; match: 'Tinggi' | 'Sedang' | 'Rendah' }>>(`/api/reports/${kode}/candidates`),
-  claim: (kode: string, data: { candidates: string[]; answers: Record<string, string>; nik?: string }) =>
+  claim: (kode: string, data: { candidates: string[]; answers: Record<string, string>; nik?: string; ktp_url?: string }) =>
     api.post<{ report: Report }>(`/api/reports/${kode}/claim`, data),
   bast: (kode: string, data: Record<string, unknown>) =>
     api.post<{ bast: string; qr: string; report: Report }>(`/api/reports/${kode}/bast`, data),
@@ -190,7 +211,7 @@ export type StaffUser = {
   id: number
   name: string
   email: string
-  role: 'cs' | 'logistik' | 'admin' | 'manager'
+  role: 'cs' | 'logistik' | 'admin' | 'manager' | 'debug'
   station: string
   initials: string
 }
@@ -256,12 +277,20 @@ export const staffApi = {
     users: () => api.get<any[]>('/api/staff/admin/users'),
     storeUser: (data: { name: string; email: string; role: string; station?: string }) =>
       api.post<{ user: any }>('/api/staff/admin/users', data),
+    updateUser: (id: number, data: { name?: string; station?: string; active?: boolean }) =>
+      api.patch<{ ok: boolean }>(`/api/staff/admin/users/${id}`, data),
     categories: () => api.get<any[]>('/api/staff/admin/categories'),
     storeCategory: (data: { name: string; retention?: number; shippable?: boolean }) =>
       api.post<{ category: any }>('/api/staff/admin/categories', data),
-    updateCategory: (id: number, data: { retention?: number; shippable?: boolean }) =>
+    updateCategory: (id: number, data: { retention?: number; shippable?: boolean; active?: boolean; icon?: string }) =>
       api.patch<{ ok: boolean }>(`/api/staff/admin/categories/${id}`, data),
     stations: () => api.get<any[]>('/api/staff/admin/stations'),
+    storeStation: (data: { code: string; name: string; line: string; hours?: string; active?: boolean }) =>
+      api.post<{ station: any }>('/api/staff/admin/stations', data),
+    updateStation: (id: number, data: { code?: string; name?: string; line?: string; hours?: string; active?: boolean }) =>
+      api.patch<{ station: any }>(`/api/staff/admin/stations/${id}`, data),
+    deleteStation: (id: number) =>
+      api.delete<{ deleted: boolean; deactivated?: boolean }>(`/api/staff/admin/stations/${id}`),
     auditLogs: (params?: { actor?: string; q?: string }) => {
       const sp = new URLSearchParams()
       if (params?.actor) sp.set('actor', params.actor)

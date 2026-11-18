@@ -427,7 +427,7 @@ class LoFoundCrudRbacTest extends TestCase
         $this->actingAs($logistik)->getJson('/api/staff/logistics/inventory')->assertStatus(200);
         $this->actingAs($logistik)->postJson('/api/staff/cs/claims/1/verify', ['action' => 'approve'])->assertStatus(403);
 
-        // Admin role checks
+        // Admin role checks (Users + Stations full CRUD)
         $this->actingAs($admin)->getJson('/api/staff/admin/users')->assertStatus(200);
         $this->actingAs($admin)->getJson('/api/staff/admin/stations')->assertStatus(200);
         $this->actingAs($admin)->postJson('/api/staff/admin/users', [
@@ -436,6 +436,27 @@ class LoFoundCrudRbacTest extends TestCase
             'role'    => 'Petugas CS',
             'station' => 'Manggarai',
         ])->assertStatus(200);
+
+        // Station CRUD: Create, Update/Hide, Delete
+        $stCreate = $this->actingAs($admin)->postJson('/api/staff/admin/stations', [
+            'code'   => 'TST' . rand(10, 99),
+            'name'   => 'Cikini Test',
+            'line'   => 'Lin Bogor',
+            'hours'  => '04:00–24:00',
+            'active' => true,
+        ]);
+        $stCreate->assertStatus(200);
+        $stId = $stCreate->json('station.id');
+
+        $stUpdate = $this->actingAs($admin)->patchJson("/api/staff/admin/stations/{$stId}", [
+            'name'   => 'Cikini Baru',
+            'active' => false,
+        ]);
+        $stUpdate->assertStatus(200);
+        $this->assertFalse($stUpdate->json('station.active'));
+
+        $stDelete = $this->actingAs($admin)->deleteJson("/api/staff/admin/stations/{$stId}");
+        $stDelete->assertStatus(200);
 
         // Kepala Stasiun (Manager) role checks
         $this->actingAs($manager)->getJson('/api/staff/manager/stats')
@@ -609,5 +630,25 @@ class LoFoundCrudRbacTest extends TestCase
 
         $directLaporan->refresh();
         $this->assertEquals('selesai', $directLaporan->status);
+
+        // Step 6: Passenger Saved Address & Transaction History CRUD
+        $addrRes = $this->actingAs($passenger)->patchJson('/api/auth/profile', [
+            'nik'     => '3201999988887777',
+            'address' => [
+                'label' => 'Rumah',
+                'name'  => 'M. Ramdhan',
+                'wa'    => '081234567890',
+                'addr'  => 'Jl. Margonda No. 10',
+                'city'  => 'Depok',
+                'zip'   => '16424',
+            ],
+        ]);
+        $addrRes->assertStatus(200);
+        $this->assertEquals('3201999988887777', $addrRes->json('user.nik'));
+        $this->assertEquals('Jl. Margonda No. 10', $addrRes->json('user.address.addr'));
+
+        $trxRes = $this->actingAs($passenger)->getJson('/api/transactions');
+        $trxRes->assertStatus(200);
+        $this->assertNotEmpty($trxRes->json());
     }
 }

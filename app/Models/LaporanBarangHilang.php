@@ -43,7 +43,7 @@ class LaporanBarangHilang extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(DetailBarangHilang::class, 'laporan_id');
+        return $this->hasMany(DetailBarangHilang::class, 'laporan_id')->orderBy('sub_kode');
     }
 
     public function detailBarang(): HasMany
