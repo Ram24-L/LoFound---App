@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Check, Clock, Copy, Download, ImageDown, Lock, MapPin, Maximize2, Package, ShieldCheck, Store, Truck, Users, X } from 'lucide-react'
-import { NON_SHIPPABLE } from '../lib/data'
-import { Badge, Banner, Button, cx, Field, inputCls, Pill, QRCode, RadioDot, RouteConnector, rupiah, Toggle, useAnimatedNumber, useToast } from '../lib/ui'
+import { Badge, Banner, Button, cx, Field, inputCls, Pill, QRCode, RadioDot, RouteConnector, rupiah, Toggle, useAnimatedNumber, useCategories, useToast } from '../lib/ui'
 import { reportApi } from '../lib/api'
+import { downloadPdfDocument, downloadTicketImage } from '../lib/export'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
 export function BastScreen({ id }: { id: string }) {
   const { reports, replace, updateReport, back, user } = useApp()
+  const { nonShippable } = useCategories()
   const toast = useToast()
   const r = reports.find((x) => x.id === id)!
   const [method, setMethod] = useState<'A' | 'B'>('B')
-  const [shippable] = useState(!r?.items?.some((i) => NON_SHIPPABLE.includes(i.category)))
+  const shippable = !r?.items?.some((i) => nonShippable.includes(i.category))
   const [proxy, setProxy] = useState(false)
   const [zoom, setZoom] = useState(false)
   const [pdf, setPdf] = useState<'idle' | 'busy' | 'error'>('idle')
-  const [pdfFail] = useState(false)
   const [qrCode, setQrCode] = useState(r?.qrCode || r?.bastCode || 'KCI-2026-089')
   const bastTitleCode = r?.bastCode || qrCode
   const m = shippable ? method : 'A'
@@ -118,15 +118,48 @@ export function BastScreen({ id }: { id: string }) {
                 onClick={() => {
                   setPdf('busy')
                   setTimeout(() => {
-                    if (pdfFail) return setPdf('error')
+                    downloadPdfDocument({
+                      filename: `BAST_${bastTitleCode}.pdf`,
+                      title: `BERITA ACARA SERAH TERIMA (BAST) #${bastTitleCode}`,
+                      subtitle: 'LoFound - KAI Commuter Lost & Found Resmi',
+                      badge: '100% VALID',
+                      rows: [
+                        ['Nomor Laporan', `#${r.id}`],
+                        ['Kode BAST / QR', qrCode],
+                        ['Nama Pemilik', user?.full || user?.name || 'Penumpang KRL'],
+                        ['NIK', user?.nik || '3201************'],
+                        ['Nama Barang', r.items[0]?.name || 'Barang Temuan'],
+                        ['Kategori & Warna', `${r.items[0]?.category || '-'} / ${r.items[0]?.color || '-'}`],
+                        ['Rute Kejadian', `St. ${r.from} -> St. ${r.to}`],
+                        ['Tanggal Laporan', `${r.date}, ${r.time} WIB`],
+                        ['Lokasi Pengambilan', `Posko CS St. ${r.to}`],
+                      ],
+                      footerNote: 'Dokumen BAST Digital sah diterbitkan secara elektronik oleh sistem LoFound KAI Commuter.',
+                    })
                     setPdf('idle')
-                    toast('BAST_KCI-2026-089.pdf diunduh.')
-                  }, 900)
+                    toast(`BAST_${bastTitleCode}.pdf berhasil diunduh.`)
+                  }, 300)
                 }}
               >
                 Unduh PDF BAST
               </Button>
-              <Button variant="tint" size="sm" icon={ImageDown} onClick={() => toast('Tiket disimpan ke galeri.')}>
+              <Button
+                variant="tint"
+                size="sm"
+                icon={ImageDown}
+                onClick={() => {
+                  downloadTicketImage({
+                    filename: `Tiket_BAST_${bastTitleCode}.png`,
+                    bastCode: bastTitleCode,
+                    qrCode,
+                    owner: user?.full || user?.name || 'Penumpang KRL',
+                    item: r.items[0]?.name || 'Barang Temuan',
+                    route: `Posko CS St. ${r.to} (${r.from} -> ${r.to})`,
+                    date: `${r.date} • ${r.updated} WIB`,
+                  })
+                  toast(`Tiket_BAST_${bastTitleCode}.png berhasil diunduh.`)
+                }}
+              >
                 Simpan ke Galeri
               </Button>
             </div>
@@ -236,7 +269,9 @@ export function ShippingScreen({ id }: { id: string }) {
   const [courier, setCourier] = useState('KAI Logistik Express')
   const [insure, setInsure] = useState(true)
   const [pay, setPay] = useState<'qris' | 'ewallet'>('qris')
-  const [phase, setPhase] = useState<'form' | 'paying' | 'pending' | 'paid'>('form')
+  const [phase, setPhase] = useState<'form' | 'paying' | 'pending' | 'paid'>(() =>
+    r?.status === 'dikirim' || r?.status === 'selesai' ? 'paid' : 'form',
+  )
   const [mode] = useState<'normal' | 'pending' | 'fail' | 'resi' | 'area'>('normal')
   const [payErr, setPayErr] = useState('')
   const [countdown, setCountdown] = useState(23 * 3600 + 59 * 60 + 12)
@@ -322,7 +357,30 @@ export function ShippingScreen({ id }: { id: string }) {
             <p className="text-xs text-muted">
               Dibayar via {pay === 'qris' ? 'QRIS / Virtual Account' : 'E-Wallet'} • {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
             </p>
-            <Button variant="outline" size="sm" icon={Download} onClick={() => toast(`Resi_Bayar_${id}.pdf diunduh.`)}>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={Download}
+              onClick={() => {
+                downloadPdfDocument({
+                  filename: `Resi_Bayar_${id}.pdf`,
+                  title: `BUKTI PEMBAYARAN ONGKIR #${id}`,
+                  subtitle: 'LoFound - Pengiriman Ekspedisi Barang Temuan KRL',
+                  badge: 'LUNAS',
+                  rows: [
+                    ['Nomor Laporan', `#${id}`],
+                    ['Barang', r?.items?.[0]?.name || 'Barang Temuan'],
+                    ['Jasa Kurir', courier],
+                    ['Nomor Resi (AWB)', realAwb],
+                    ['Total Pembayaran', rupiah(total)],
+                    ['Metode Bayar', pay === 'qris' ? 'QRIS / Virtual Account' : 'E-Wallet'],
+                    ['Status Pengiriman', r?.status === 'selesai' ? 'Tiba di Tujuan' : r?.awb ? 'Dalam Perjalanan' : 'Menunggu Kurir'],
+                  ],
+                  footerNote: 'Bukti pembayaran sah layanan pengiriman barang temuan LoFound KAI Commuter.',
+                })
+                toast(`Resi_Bayar_${id}.pdf berhasil diunduh.`)
+              }}
+            >
               Unduh Resi Bayar PDF
             </Button>
           </section>

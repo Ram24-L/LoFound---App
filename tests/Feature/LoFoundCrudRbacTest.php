@@ -458,6 +458,22 @@ class LoFoundCrudRbacTest extends TestCase
         $stDelete = $this->actingAs($admin)->deleteJson("/api/staff/admin/stations/{$stId}");
         $stDelete->assertStatus(200);
 
+        // Category CRUD: Create -> Appears in public /api/categories -> Delete
+        $catCreate = $this->actingAs($admin)->postJson('/api/staff/admin/categories', [
+            'name'      => 'Aksesoris Test ' . rand(10, 99),
+            'retention' => 30,
+            'shippable' => true,
+        ]);
+        $catCreate->assertStatus(200);
+        $catId = $catCreate->json('category.id');
+        $catName = $catCreate->json('category.name');
+
+        $pubCats = collect($this->getJson('/api/categories')->json())->pluck('nama')->toArray();
+        $this->assertContains($catName, $pubCats);
+
+        $catDelete = $this->actingAs($admin)->deleteJson("/api/staff/admin/categories/{$catId}");
+        $catDelete->assertStatus(200);
+
         // Kepala Stasiun (Manager) role checks
         $this->actingAs($manager)->getJson('/api/staff/manager/stats')
             ->assertStatus(200)

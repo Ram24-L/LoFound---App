@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Camera, Check, CheckCircle2, Clock, Flag, Info, Keyboard, Link2, Lock, MessageSquare, Pencil, Plus, QrCode, RefreshCw, ScanLine, Search, ShieldCheck, UserCheck, Users, X, XCircle } from 'lucide-react'
-import { CATEGORIES, COLORS, STATIONS, type Claim, type InvItem, type InvStatus } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, useToast } from '../lib/ui'
+import { COLORS, STATIONS, type Claim, type InvItem, type InvStatus } from '../lib/data'
+import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, useCategories, useToast } from '../lib/ui'
 import { Drawer, Modal, PageHead, Panel, Tabs, td, th, useStaff } from './common'
 import { staffApi, uploadApi } from '../lib/api'
 
@@ -11,6 +11,7 @@ const statusIcon = { Tersimpan: Lock, 'Dalam Klaim': Clock, Selesai: CheckCircle
 /* ---------------- Inventory ---------------- */
 export function InventoryPage() {
   const { inventory, nav, staffUser } = useStaff()
+  const { categories: CATEGORIES } = useCategories()
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('Semua')
   const [st, setSt] = useState('Semua')
@@ -139,11 +140,16 @@ export function InventoryPage() {
 
 function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => void; edit?: InvItem }) {
   const { inventory, setInventory, refreshDashboard, staffUser } = useStaff()
+  const { categories: CATEGORIES } = useCategories()
   const toast = useToast()
   const claimLocked = edit?.status === 'Dalam Klaim'
   const defStation = staffUser?.station && staffUser.station !== 'Pusat' ? staffUser.station : 'Jakarta Kota'
-  const blank = { cat: '', name: '', color: '', station: defStation, found: '2026-11-02T15:30', detail: '', serial: '', locker: '', notes: '', photo_url: '' }
-  const [f, setF] = useState(edit ? { cat: edit.cat, name: edit.name, color: edit.color, station: edit.station, found: '2026-11-02T12:30', photo_url: (edit.secret as any)?.photo || '', ...edit.secret } : blank)
+  const nowIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  const blank = { cat: '', name: '', color: '', station: defStation, found: nowIso, detail: '', serial: '', locker: '', notes: '', photo_url: '' }
+  const [f, setF] = useState(edit ? { cat: edit.cat, name: edit.name, color: edit.color, station: edit.station, found: nowIso, photo_url: (edit.secret as any)?.photo || '', ...edit.secret } : blank)
+  const isPresetColor = !f.color || COLORS.some((c) => c.name === f.color)
+  const [customColorMode, setCustomColorMode] = useState(!isPresetColor)
+  const [customHex, setCustomHex] = useState('#318FB5')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -156,9 +162,10 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
     try {
       const res = await uploadApi.upload(file)
       set('photo_url', res.url)
-      toast('Foto gudang berhasil diunggah.')
+      setErrors((er) => ({ ...er, photo: '' }))
+      toast('Foto barang berhasil diunggah.')
     } catch (err: any) {
-      toast(err.message || 'Gagal mengunggah foto gudang.', { tone: 'danger' })
+      toast(err.message || 'Gagal mengunggah foto barang.', { tone: 'danger' })
     } finally {
       setUploading(false)
     }
@@ -168,6 +175,7 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
     const er: Record<string, string> = {}
     if (!f.cat) er.cat = 'Pilih salah satu kategori.'
     if (f.name.trim().length < 3) er.name = 'Kolom ini wajib diisi.'
+    if (!edit && !f.photo_url) er.photo = 'Foto asli barang wajib diunggah oleh petugas.'
     setErrors(er)
     if (Object.keys(er).length) return
     setBusy(true)
@@ -232,12 +240,56 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
         </Field>
         <Field label="Warna">
           {(a) => (
-            <select {...a} disabled={pub} value={f.color} onChange={(e) => set('color', e.target.value)} className={inputCls() + ' h-11 disabled:opacity-60'}>
-              <option value="">Pilih warna</option>
-              {COLORS.map((c) => (
-                <option key={c.name}>{c.name}</option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-2">
+              <select
+                {...a}
+                disabled={pub}
+                value={customColorMode ? '__custom__' : f.color}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setCustomColorMode(true)
+                    set('color', '')
+                  } else {
+                    setCustomColorMode(false)
+                    set('color', e.target.value)
+                  }
+                }}
+                className={inputCls() + ' h-11 disabled:opacity-60'}
+              >
+                <option value="">Pilih warna</option>
+                {COLORS.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="__custom__">Lainnya (Isi / Pilih Warna)...</option>
+              </select>
+              {customColorMode && (
+                <div className="flex items-center gap-2">
+                  <label className="relative flex size-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-line bg-white" title="Pilih warna dari Color Picker">
+                    <input
+                      type="color"
+                      disabled={pub}
+                      value={customHex}
+                      onChange={(e) => {
+                        setCustomHex(e.target.value)
+                        if (!f.color.trim()) set('color', `Kustom (${e.target.value.toUpperCase()})`)
+                      }}
+                      className="absolute inset-0 size-12 -translate-x-1 -translate-y-1 cursor-pointer border-0 p-0 opacity-0"
+                    />
+                    <span className="size-6 rounded-lg border border-black/10" style={{ background: customHex }} />
+                  </label>
+                  <input
+                    type="text"
+                    disabled={pub}
+                    value={f.color}
+                    onChange={(e) => set('color', e.target.value)}
+                    placeholder="Ketik warna (misal: Rose Gold, Ungu)"
+                    className={inputCls() + ' h-10 flex-1 text-xs'}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </Field>
         <Field label="Stasiun Temu">
@@ -269,20 +321,22 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
             <Field label="Lokasi Loker">{(a) => <input {...a} disabled={pub} value={f.locker} onChange={(e) => set('locker', e.target.value)} placeholder="Loker B-04" className={inputCls() + ' h-11 bg-white disabled:opacity-60'} />}</Field>
           </div>
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-muted">Foto Asli Barang</p>
+            <p className="mb-1.5 text-xs font-semibold text-muted">
+              Foto Asli Barang <span className="text-cta">*</span>
+            </p>
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
               className="sr-only"
-              aria-label="Upload foto gudang"
+              aria-label="Upload foto barang"
               onChange={(e) => handlePhotoUpload(e.target.files?.[0])}
             />
             {f.photo_url ? (
               <div className="flex items-center gap-3 rounded-2xl bg-white p-3 border border-line">
                 <img src={f.photo_url} alt="Foto Barang" className="size-14 rounded-xl object-cover" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-ink truncate">Foto tersimpan</p>
+                  <p className="text-xs font-bold text-ink truncate">Foto barang tersimpan</p>
                   <p className="text-[11px] text-muted">Aman di posko CS</p>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => fileRef.current?.click()}>Ganti</Button>
@@ -292,10 +346,18 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
                 type="button"
                 disabled={pub || uploading}
                 onClick={() => fileRef.current?.click()}
-                className="flex h-20 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-accent bg-white text-sm font-bold text-primary disabled:opacity-60 hover:bg-tint/50"
+                className={cx(
+                  'flex h-20 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-white text-sm font-bold text-primary disabled:opacity-60 hover:bg-tint/50',
+                  errors.photo ? 'border-danger text-danger' : 'border-accent',
+                )}
               >
-                <Camera className="size-5" aria-hidden /> {uploading ? 'Mengunggah...' : 'Ambil / Unggah Foto Gudang'}
+                <Camera className="size-5" aria-hidden /> {uploading ? 'Mengunggah...' : 'Ambil / Unggah Foto Barang'}
               </button>
+            )}
+            {errors.photo && (
+              <p role="alert" className="mt-1.5 flex items-center gap-1 text-xs font-medium text-danger">
+                <AlertCircle className="size-3.5" aria-hidden /> {errors.photo}
+              </p>
             )}
           </div>
           <Field label="Catatan CS">{(a) => <textarea {...a} rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Kondisi barang, saksi, dll." className={inputCls() + ' resize-none bg-white py-2.5'} />}</Field>

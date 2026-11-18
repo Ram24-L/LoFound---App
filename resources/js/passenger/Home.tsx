@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, FileClock, Search, ShieldCheck, Trash2 } from 'lucide-react'
-import { CATEGORIES, FEED, STATUS_META, STATIONS } from '../lib/data'
-import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCountUp } from '../lib/ui'
+import { FEED, STATUS_META, STATIONS } from '../lib/data'
+import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp } from '../lib/ui'
 import { homeApi } from '../lib/api'
 import { useApp } from './ctx'
 import { SectionTitle } from './shell'
 
-const CATS = ['Semua Kategori', ...CATEGORIES]
-
 export function HomeScreen() {
   const { user, go, reports, unread, requireAuth, draft, setDraft } = useApp()
+  const { categories } = useCategories()
+  const CATS = ['Semua Kategori', ...categories]
   const [cat, setCat] = useState('Semua Kategori')
   const [from, setFrom] = useState('St. Bogor')
   const [to, setTo] = useState('St. Manggarai')

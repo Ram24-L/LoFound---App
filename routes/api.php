@@ -90,6 +90,7 @@ Route::middleware('auth')->prefix('staff')->group(function () {
         Route::get('/admin/categories', [StaffAdminController::class, 'categories']);
         Route::post('/admin/categories', [StaffAdminController::class, 'storeCategory']);
         Route::patch('/admin/categories/{id}', [StaffAdminController::class, 'updateCategory']);
+        Route::delete('/admin/categories/{id}', [StaffAdminController::class, 'deleteCategory']);
         Route::get('/admin/stations', [StaffAdminController::class, 'stations']);
         Route::post('/admin/stations', [StaffAdminController::class, 'storeStation']);
         Route::patch('/admin/stations/{id}', [StaffAdminController::class, 'updateStation']);

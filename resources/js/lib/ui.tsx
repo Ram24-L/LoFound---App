@@ -675,3 +675,31 @@ export function Logo({ light, size = 'md' }: { light?: boolean; size?: 'sm' | 'm
     </span>
   )
 }
+
+export function useCategories(fallback: string[] = ['Elektronik', 'Non Elektronik', 'Uang Tunai']) {
+  const [categories, setCategories] = useState<string[]>(fallback)
+  const [nonShippable, setNonShippable] = useState<string[]>(['Uang Tunai'])
+
+  useEffect(() => {
+    let mounted = true
+    const load = () => {
+      fetch('/api/categories', { headers: { Accept: 'application/json' } })
+        .then((r) => r.json())
+        .then((data) => {
+          if (mounted && Array.isArray(data) && data.length > 0) {
+            setCategories(data.map((c: any) => c.nama || c.name))
+            setNonShippable(data.filter((c: any) => c.shippable === false).map((c: any) => c.nama || c.name))
+          }
+        })
+        .catch(() => {})
+    }
+    load()
+    window.addEventListener('focus', load)
+    return () => {
+      mounted = false
+      window.removeEventListener('focus', load)
+    }
+  }, [])
+
+  return { categories, nonShippable }
+}

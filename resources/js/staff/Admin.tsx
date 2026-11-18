@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, EyeOff, Mail, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { ADMIN_CATEGORIES, AUDIT, CATEGORIES, STAFF_USERS, STATIONS } from '../lib/data'
-import { Badge, Banner, Button, cx, iconLibrary, Field, inputCls, useToast } from '../lib/ui'
+import { Badge, Banner, Button, cx, Dialog, iconLibrary, Field, inputCls, useToast } from '../lib/ui'
 import { Modal, PageHead, Panel, Tabs, td, th } from './common'
 import { staffApi } from '../lib/api'
 
@@ -48,6 +48,35 @@ export function MasterDataPage() {
   })
   const [stErr, setStErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    body: string
+    tone?: 'danger' | 'warn' | 'info'
+    confirmLabel?: string
+    onConfirm: () => Promise<void> | void
+  } | null>(null)
+
+  const openConfirm = (cfg: {
+    title: string
+    body: string
+    tone?: 'danger' | 'warn' | 'info'
+    confirmLabel?: string
+    onConfirm: () => Promise<void> | void
+  }) => {
+    setConfirmDialog(cfg)
+  }
+
+  const runConfirm = async () => {
+    if (!confirmDialog) return
+    setConfirmBusy(true)
+    try {
+      await confirmDialog.onConfirm()
+      setConfirmDialog(null)
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
 
   // Fetch initial data from backend
   const loadData = () => {
@@ -88,6 +117,26 @@ export function MasterDataPage() {
       saved()
     } catch (error: any) {
       toast(error.message || 'Gagal update kategori.', { tone: 'danger' })
+    }
+  }
+
+  const handleDeleteCategory = async (catItem: any) => {
+    try {
+      if (catItem.id) {
+        const res = await staffApi.admin.deleteCategory(catItem.id)
+        if (res.deleted) {
+          setCats((prev) => prev.filter((x) => x.name !== catItem.name))
+          toast(`Kategori "${catItem.name}" berhasil dihapus permanen.`)
+        } else {
+          setCats((prev) => prev.map((x) => (x.name === catItem.name ? { ...x, active: false } : x)))
+          toast(`Kategori "${catItem.name}" sedang digunakan oleh barang, status diubah menjadi Non-aktif.`)
+        }
+      } else {
+        setCats((prev) => prev.filter((x) => x.name !== catItem.name))
+        toast(`Kategori "${catItem.name}" dihapus.`)
+      }
+    } catch (error: any) {
+      toast(error.message || 'Gagal menghapus kategori.', { tone: 'danger' })
     }
   }
 
@@ -307,14 +356,45 @@ export function MasterDataPage() {
                       <MiniSwitch
                         checked={c.active}
                         label={`Aktif ${c.name}`}
-                        onChange={(v) => handleUpdateCategory(c, { active: v })}
+                        onChange={(v) =>
+                          openConfirm({
+                            title: v ? `Aktifkan Kategori "${c.name}"?` : `Nonaktifkan Kategori "${c.name}"?`,
+                            body: v
+                              ? `Apakah Anda yakin ingin mengaktifkan kembali kategori "${c.name}" agar muncul di aplikasi penumpang?`
+                              : `Apakah Anda yakin ingin menonaktifkan kategori "${c.name}"? Kategori yang non-aktif tidak akan tampil di form laporan penumpang.`,
+                            tone: v ? 'info' : 'warn',
+                            confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan',
+                            onConfirm: () => handleUpdateCategory(c, { active: v }),
+                          })
+                        }
                       />
                     </td>
                     <td className={td + ' text-muted'}>{c.used} barang</td>
                     <td className={td}>
-                      <Button size="sm" variant="ghost" onClick={() => setWarn(`Kategori "${c.name}" digunakan oleh ${c.used} barang.`)}>
-                        Detail
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button size="sm" variant="ghost" onClick={() => setWarn(`Kategori "${c.name}" digunakan oleh ${c.used} barang.`)}>
+                          Detail
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={Trash2}
+                          className="text-danger hover:bg-danger-soft"
+                          onClick={() =>
+                            openConfirm({
+                              title: `Hapus Kategori "${c.name}"?`,
+                              body: c.used > 0
+                                ? `Apakah Anda yakin? Kategori "${c.name}" sedang digunakan oleh ${c.used} barang sehingga statusnya akan diubah menjadi Non-aktif.`
+                                : `Apakah Anda yakin ingin menghapus kategori "${c.name}" secara permanen dari Data Master?`,
+                              tone: 'danger',
+                              confirmLabel: 'Ya, Hapus',
+                              onConfirm: () => handleDeleteCategory(c),
+                            })
+                          }
+                        >
+                          Hapus
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -347,7 +427,17 @@ export function MasterDataPage() {
                     <MiniSwitch
                       checked={!!s.active}
                       label={`Tampilkan Stasiun ${s.name}`}
-                      onChange={(v) => handleToggleStation(s, v)}
+                      onChange={(v) =>
+                        openConfirm({
+                          title: v ? `Aktifkan St. ${s.name}?` : `Sembunyikan St. ${s.name}?`,
+                          body: v
+                            ? `Apakah Anda yakin ingin menampilkan kembali St. ${s.name} di daftar pilihan stasiun penumpang?`
+                            : `Apakah Anda yakin ingin menyembunyikan St. ${s.name} dari daftar stasiun penumpang?`,
+                          tone: v ? 'info' : 'warn',
+                          confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Sembunyikan',
+                          onConfirm: () => handleToggleStation(s, v),
+                        })
+                      }
                     />
                   </td>
                   <td className={td}>
@@ -379,7 +469,15 @@ export function MasterDataPage() {
                         variant="ghost"
                         icon={Trash2}
                         className="text-danger hover:bg-danger-soft"
-                        onClick={() => handleDeleteStation(s)}
+                        onClick={() =>
+                          openConfirm({
+                            title: `Hapus Stasiun St. ${s.name}?`,
+                            body: `Apakah Anda yakin ingin menghapus St. ${s.name} (${s.code})? Jika stasiun sudah dipakai di laporan, statusnya akan otomatis disembunyikan.`,
+                            tone: 'danger',
+                            confirmLabel: 'Ya, Hapus',
+                            onConfirm: () => handleDeleteStation(s),
+                          })
+                        }
                       >
                         Hapus
                       </Button>
@@ -419,7 +517,17 @@ export function MasterDataPage() {
                     <MiniSwitch
                       checked={u.active !== false}
                       label={`Aktifkan staf ${u.name}`}
-                      onChange={(v) => handleToggleUser(u, v)}
+                      onChange={(v) =>
+                        openConfirm({
+                          title: v ? `Aktifkan Akun ${u.name}?` : `Nonaktifkan Akun ${u.name}?`,
+                          body: v
+                            ? `Apakah Anda yakin ingin mengaktifkan kembali akun petugas ${u.name} (${u.email})?`
+                            : `Apakah Anda yakin ingin menonaktifkan akun petugas ${u.name}? Petugas tidak akan bisa login ke Konsol Petugas.`,
+                          tone: v ? 'info' : 'warn',
+                          confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan',
+                          onConfirm: () => handleToggleUser(u, v),
+                        })
+                      }
                     />
                   </td>
                   <td className={td}>
@@ -442,7 +550,24 @@ export function MasterDataPage() {
             <Button variant="ghost" onClick={() => setStModal(null)}>
               Batal
             </Button>
-            <Button variant="cta" disabled={!stForm.code.trim() || !stForm.name.trim() || busy} loading={busy} onClick={handleSaveStation}>
+            <Button
+              variant="cta"
+              disabled={!stForm.code.trim() || !stForm.name.trim() || busy}
+              loading={busy}
+              onClick={() => {
+                if (stModal === 'edit') {
+                  openConfirm({
+                    title: `Simpan Perubahan St. ${stForm.name}?`,
+                    body: `Apakah Anda yakin ingin memperbarui data Stasiun ${stForm.name} (${stForm.code}) di Data Master?`,
+                    tone: 'info',
+                    confirmLabel: 'Ya, Simpan',
+                    onConfirm: handleSaveStation,
+                  })
+                } else {
+                  handleSaveStation()
+                }
+              }}
+            >
               {stModal === 'edit' ? 'Simpan Perubahan' : 'Tambah Stasiun'}
             </Button>
           </>
@@ -568,6 +693,32 @@ export function MasterDataPage() {
           </Field>
         </div>
       </Modal>
+
+      <Dialog
+        fixed
+        open={!!confirmDialog}
+        onClose={() => !confirmBusy && setConfirmDialog(null)}
+        tone={confirmDialog?.tone || 'danger'}
+        icon={confirmDialog?.tone === 'danger' ? Trash2 : AlertTriangle}
+        title={confirmDialog?.title || 'Konfirmasi Tindakan'}
+        width="max-w-[420px]"
+        actions={
+          <div className="flex w-full justify-end gap-2">
+            <Button variant="ghost" disabled={confirmBusy} onClick={() => setConfirmDialog(null)}>
+              Batal
+            </Button>
+            <Button
+              variant={confirmDialog?.tone === 'danger' ? 'danger' : 'cta'}
+              loading={confirmBusy}
+              onClick={runConfirm}
+            >
+              {confirmDialog?.confirmLabel || 'Ya, Yakin'}
+            </Button>
+          </div>
+        }
+      >
+        <p>{confirmDialog?.body}</p>
+      </Dialog>
     </>
   )
 }
