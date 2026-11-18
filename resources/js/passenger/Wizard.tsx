@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, CalendarClock, Camera, Check, ChevronDown, FileClock, ImageIcon, Info, Lock, LogOut, Trash2, X } from 'lucide-react'
-import { CATEGORIES, NON_SHIPPABLE, STATUS_META, type Report } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, cx, Dialog, Field, inputCls, Pill, RouteConnector, Sheet, Toggle, useToast } from '../lib/ui'
+import { STATUS_META, type Report } from '../lib/data'
+import { Badge, Banner, Button, CategoryBadge, cx, Dialog, Field, inputCls, Pill, RouteConnector, Sheet, Toggle, useCategories, useToast } from '../lib/ui'
 import { reportApi, uploadApi } from '../lib/api'
 import { useApp, type Draft } from './ctx'
 import { StationPicker } from './Home'
@@ -29,6 +29,7 @@ const toMin = (t: string) => {
 
 export function WizardScreen() {
   const { draft, setDraft, user, requireAuth, reports, setReports, replace, back, updateReport } = useApp()
+  const { categories: CATEGORIES, nonShippable: NON_SHIPPABLE } = useCategories()
   const toast = useToast()
   const initialDraft = useRef(draft)
   const [prompt, setPrompt] = useState(!!draft)

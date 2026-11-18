@@ -52,7 +52,7 @@ export type Report = {
 }
 
 export const STATUS_META: Record<ReportStatus, { label: string; tone: 'success' | 'info' | 'coral' | 'warn' | 'danger' | 'neutral'; action?: boolean; locked?: boolean }> = {
-  diterima: { label: 'Diterima', tone: 'info' },
+  diterima: { label: 'Laporan Diterima', tone: 'info' },
   pencarian: { label: 'Dalam Pencarian', tone: 'info' },
   kandidat: { label: 'Butuh Verifikasi', tone: 'coral', action: true },
   ditinjau: { label: 'Klaim Ditinjau', tone: 'info', locked: true },

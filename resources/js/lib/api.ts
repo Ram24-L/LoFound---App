@@ -284,6 +284,8 @@ export const staffApi = {
       api.post<{ category: any }>('/api/staff/admin/categories', data),
     updateCategory: (id: number, data: { retention?: number; shippable?: boolean; active?: boolean; icon?: string }) =>
       api.patch<{ ok: boolean }>(`/api/staff/admin/categories/${id}`, data),
+    deleteCategory: (id: number) =>
+      api.delete<{ deleted: boolean; deactivated?: boolean }>(`/api/staff/admin/categories/${id}`),
     stations: () => api.get<any[]>('/api/staff/admin/stations'),
     storeStation: (data: { code: string; name: string; line: string; hours?: string; active?: boolean }) =>
       api.post<{ station: any }>('/api/staff/admin/stations', data),
@@ -301,6 +303,10 @@ export const staffApi = {
   },
   manager: {
     stats: () =>
-      api.get<{ kpis: Record<string, string>; series: Record<string, { labels: string[]; a: number[]; b: number[] }> }>('/api/staff/manager/stats'),
+      api.get<{
+        kpis: Record<string, string>
+        series: Record<string, { labels: string[]; a: number[]; b: number[] }>
+        export_rows?: Array<{ kode: string; tanggal: string; pelapor: string; kategori: string; barang: string; warna: string; rute: string; status: string }>
+      }>('/api/staff/manager/stats'),
   },
 }

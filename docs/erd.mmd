@@ -1,0 +1,149 @@
+erDiagram
+    stasiun {
+        bigint id PK
+        string kode UK
+        string nama
+        string lin
+        string jam_layanan
+        boolean active
+    }
+
+    users {
+        bigint id PK
+        string name
+        string email UK
+        string phone
+        string nik
+        json address
+        string role
+        bigint stasiun_id FK
+        boolean active
+    }
+
+    kategori_barang {
+        bigint id PK
+        string nama
+        string ikon
+        integer retention_days
+        boolean shippable
+        boolean active
+    }
+
+    laporan_barang_hilang {
+        bigint id PK
+        string kode UK
+        bigint user_id FK
+        bigint stasiun_dari_id FK
+        bigint stasiun_ke_id FK
+        date tanggal_kejadian
+        string waktu_kejadian
+        string posisi_terakhir
+        text ciri_rahasia
+        string foto_referensi
+        string status
+        text alasan_batal
+        boolean notify
+    }
+
+    detail_barang_hilang {
+        bigint id PK
+        bigint laporan_id FK
+        string sub_kode
+        bigint kategori_id FK
+        string nama_barang
+        string warna
+    }
+
+    riwayat_laporan {
+        bigint id PK
+        bigint laporan_id FK
+        string waktu
+        string keterangan
+    }
+
+    barang_temuan {
+        bigint id PK
+        string kode UK
+        bigint petugas_id FK
+        bigint stasiun_temuan_id FK
+        bigint kategori_id FK
+        string nama_barang
+        string warna
+        string lokasi_spesifik
+        date tanggal_temuan
+        string waktu_temuan
+        string foto_barang
+        text ciri_kunci
+        string status_simpan
+        integer expires_in
+        json secret
+    }
+
+    pencocokan_kandidat {
+        bigint id PK
+        bigint laporan_id FK
+        bigint barang_temuan_id FK
+        integer skor_kecocokan
+        string status_cocok
+    }
+
+    klaim_verifikasi {
+        bigint id PK
+        string kode UK
+        bigint laporan_id FK
+        bigint barang_temuan_id FK
+        text jawaban_rahasia
+        string nik
+        string bukti_tambahan
+        string status_verifikasi
+        bigint verified_by FK
+        text catatan_cs
+    }
+
+    bast_pengambilan {
+        bigint id PK
+        string kode UK
+        bigint klaim_id FK
+        text kode_qr
+        string metode_ambil
+        bigint stasiun_ambil_id FK
+        text alamat_kirim
+        string kurir
+        integer ongkir
+        string status_bayar
+        string nomor_resi
+        timestamp waktu_serah_terima
+    }
+
+    audit_logs {
+        bigint id PK
+        bigint user_id FK
+        string who
+        string act
+        string obj
+        string res
+    }
+
+    stasiun ||--o{ users : "assigned_to"
+    stasiun ||--o{ laporan_barang_hilang : "origin"
+    stasiun ||--o{ laporan_barang_hilang : "destination"
+    stasiun ||--o{ barang_temuan : "found_at"
+    stasiun ||--o{ bast_pengambilan : "pickup_at"
+
+    users ||--o{ laporan_barang_hilang : "submits"
+    users ||--o{ barang_temuan : "logs"
+    users ||--o{ klaim_verifikasi : "verifies"
+    users ||--o{ audit_logs : "performs"
+
+    kategori_barang ||--o{ detail_barang_hilang : "categorizes"
+    kategori_barang ||--o{ barang_temuan : "categorizes"
+
+    laporan_barang_hilang ||--|{ detail_barang_hilang : "has_items"
+    laporan_barang_hilang ||--o{ riwayat_laporan : "tracks"
+    laporan_barang_hilang ||--o{ pencocokan_kandidat : "matches"
+    laporan_barang_hilang ||--o{ klaim_verifikasi : "claims"
+
+    barang_temuan ||--o{ pencocokan_kandidat : "candidate_for"
+    barang_temuan ||--o{ klaim_verifikasi : "claimed_in"
+
+    klaim_verifikasi ||--o| bast_pengambilan : "generates"

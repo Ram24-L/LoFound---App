@@ -132,15 +132,16 @@ class StaffAdminController extends Controller
     public function categories()
     {
         $cats = KategoriBarang::withCount('detailBarangHilang')
+            ->orderBy('id')
             ->get()
             ->map(function ($c) {
                 return [
                     'id'        => $c->id,
                     'name'      => $c->nama,
-                    'icon'      => $c->nama,
+                    'icon'      => $c->ikon ?: $c->nama,
                     'retention' => $c->retention_days ?? 30,
                     'shippable' => (bool) ($c->shippable ?? true),
-                    'active'    => true,
+                    'active'    => (bool) ($c->active ?? true),
                     'used'      => $c->detail_barang_hilang_count,
                 ];
             });
@@ -205,6 +206,25 @@ class StaffAdminController extends Controller
         $cat->save();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * DELETE /api/staff/admin/categories/{id}
+     */
+    public function deleteCategory(Request $request, int $id)
+    {
+        $cat = KategoriBarang::findOrFail($id);
+        $name = $cat->nama;
+
+        try {
+            $cat->delete();
+            AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Hapus kategori', $name);
+            return response()->json(['deleted' => true]);
+        } catch (\Exception) {
+            $cat->update(['active' => false]);
+            AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Nonaktifkan kategori (terpakai)', $name);
+            return response()->json(['deleted' => false, 'deactivated' => true]);
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import { Button, cx, useToast } from '../lib/ui'
 import { PageHead, Panel, Tabs, useStaff } from './common'
 import { AuditTable } from './Admin'
 import { staffApi } from '../lib/api'
+import { downloadExcelFile, downloadPdfDocument } from '../lib/export'
 
 const DEFAULT_SERIES = {
   '7': { labels: ['27 Okt', '28', '29', '30', '31', '1 Nov', 'Hari Ini'], a: [18, 22, 19, 25, 21, 16, 24], b: [14, 17, 16, 21, 19, 13, 20] },
@@ -19,11 +20,12 @@ export function DashboardPage() {
   const [exp, setExp] = useState<'pdf' | 'xlsx' | null>(null)
   const [err, setErr] = useState('')
   const [seriesData, setSeriesData] = useState<any>(DEFAULT_SERIES)
+  const [exportRows, setExportRows] = useState<Array<{ kode: string; tanggal: string; pelapor: string; kategori: string; barang: string; warna: string; rute: string; status: string }>>([])
   const [kpiData, setKpiData] = useState<any>({
-    ratio: '86.4%',
-    avg_time: '14 Jam',
-    total_reports: '396',
-    completed: '342',
+    ratio: '89.4%',
+    avg_time: '2.4 Jam',
+    total_reports: '123',
+    completed: '110',
   })
 
   useEffect(() => {
@@ -31,19 +33,47 @@ export function DashboardPage() {
       .then((res) => {
         if (res.kpis) setKpiData(res.kpis)
         if (res.series) setSeriesData(res.series)
+        if (res.export_rows) setExportRows(res.export_rows)
       })
       .catch(() => {})
   }, [])
 
   const s = seriesData[range] || DEFAULT_SERIES[range]
+  const stationName = staffUser?.station ?? 'Jakarta Kota'
 
   const doExport = (k: 'pdf' | 'xlsx') => {
     setExp(k)
     setErr('')
     setTimeout(() => {
+      const dateStamp = new Date().toISOString().slice(0, 10)
+      if (k === 'pdf') {
+        downloadPdfDocument({
+          filename: `Laporan_Eksekutif_LoFound_${dateStamp}.pdf`,
+          title: 'LAPORAN EKSEKUTIF BULANAN LOFOUND KAI COMMUTER',
+          subtitle: `Stasiun ${stationName} • Diekspor pada ${new Date().toLocaleString('id-ID')}`,
+          badge: `RASIO ${kpiData.ratio}`,
+          rows: [
+            ['Rasio Pengembalian (KPI)', kpiData.ratio],
+            ['Rata-rata Waktu Temu & Verifikasi', kpiData.avg_time],
+            ['Total Laporan Masuk', `${kpiData.total_reports} laporan`],
+            ['Total Barang Selesai Kembali', `${kpiData.completed} barang`],
+            ['Stasiun Posko Utama', `St. ${stationName}`],
+          ],
+          tableHeaders: ['Kode', 'Tanggal', 'Kategori', 'Barang', 'Rute', 'Status'],
+          tableRows: exportRows.map((r) => [r.kode, r.tanggal, r.kategori, r.barang, r.rute, r.status]),
+          footerNote: 'Laporan resmi diekspor langsung dari database PostgreSQL LoFound KAI Commuter.',
+        })
+      } else {
+        downloadExcelFile({
+          filename: `Laporan_Eksekutif_LoFound_${dateStamp}.xls`,
+          sheetName: 'Laporan Eksekutif',
+          headers: ['Kode Laporan', 'Tanggal Kejadian', 'Nama Pelapor', 'Kategori', 'Nama Barang', 'Warna', 'Rute KRL', 'Status Akhir'],
+          rows: exportRows.map((r) => [r.kode, r.tanggal, r.pelapor, r.kategori, r.barang, r.warna, r.rute, r.status]),
+        })
+      }
       setExp(null)
-      toast(`Laporan eksekutif ${k.toUpperCase()} berhasil diunduh.`)
-    }, 1200)
+      toast(`File laporan eksekutif (${k.toUpperCase()}) berhasil diunduh ke perangkat Anda.`)
+    }, 300)
   }
 
   const W = 760
@@ -57,11 +87,9 @@ export function DashboardPage() {
   const kpis = [
     { l: 'Rasio Kembali', v: kpiData.ratio, d: '+2.1 poin', up: true, icon: Percent, c: 'bg-mint text-success' },
     { l: 'Rata-rata Waktu Temu', v: kpiData.avg_time, d: '-3 jam', up: true, icon: Timer, c: 'bg-tint text-primary' },
-    { l: 'Total Laporan', v: kpiData.total_reports, d: '-8%', up: false, icon: ClipboardList, c: 'bg-tint text-primary' },
+    { l: 'Total Laporan', v: kpiData.total_reports, d: 'Real-time DB', up: true, icon: ClipboardList, c: 'bg-tint text-primary' },
     { l: 'Barang Selesai', v: kpiData.completed, d: '+5%', up: true, icon: PackageCheck, c: 'bg-mint text-success' },
   ]
-
-  const stationName = staffUser?.station ?? 'Jakarta Kota'
 
   return (
     <>

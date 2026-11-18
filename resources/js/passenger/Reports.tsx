@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckSquare, ChevronRight, Clock, Eye, EyeOff, FileText, Filter, History, ImageIcon, Lock, MoreVertical, Pencil, RefreshCw, Share2, XCircle } from 'lucide-react'
-import { CATEGORIES, COLORS, STATUS_META, type Report } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, cx, Dialog, EmptyState, ErrorState, Field, IconButton, InlineRoute, inputCls, RadioDot, RouteConnector, Sheet, Skeleton, useToast } from '../lib/ui'
+import { AlertTriangle, CheckSquare, ChevronRight, Clock, Eye, EyeOff, FileText, Filter, History, ImageIcon, Lock, MoreVertical, Pencil, Plus, RefreshCw, Share2, XCircle } from 'lucide-react'
+import { COLORS, STATUS_META, type Report } from '../lib/data'
+import { Badge, Banner, Button, CategoryBadge, cx, Dialog, EmptyState, ErrorState, Field, IconButton, InlineRoute, inputCls, RadioDot, RouteConnector, Sheet, Skeleton, useCategories, useToast } from '../lib/ui'
 import { reportApi } from '../lib/api'
 import { useApp } from './ctx'
 import { Screen, SectionTitle, TopBar } from './shell'
@@ -497,6 +497,7 @@ export function CancelSheet({ open, onClose, report }: { open: boolean; onClose:
 /* ---------------- Edit ---------------- */
 export function EditScreen({ id }: { id: string }) {
   const { reports, updateReport, back } = useApp()
+  const { categories: CATEGORIES } = useCategories()
   const toast = useToast()
   const r = reports.find((x) => x.id === id)!
   const locked = r.candidates > 0
@@ -579,19 +580,95 @@ export function EditScreen({ id }: { id: string }) {
 }
 
 export function ColorSwatches({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const isPreset = COLORS.some((c) => c.name.toLowerCase() === (value || '').toLowerCase())
+  const [showCustom, setShowCustom] = useState(!isPreset && !!value)
+  const [customHex, setCustomHex] = useState('#6366f1')
+  const [customName, setCustomName] = useState(!isPreset && value ? value : '')
+
   return (
-    <div role="radiogroup" aria-label="Warna dominan" className="flex flex-wrap gap-1">
-      {COLORS.map((c) => (
-        <button key={c.name} role="radio" aria-checked={value === c.name} aria-label={c.name} title={c.name} onClick={() => onChange(c.name)} className="flex size-11 items-center justify-center rounded-full">
-          <span className={cx('flex size-8 items-center justify-center rounded-full border', value === c.name ? 'ring-2 ring-primary ring-offset-2' : '', c.name === 'Putih' ? 'border-[#cfd8de]' : 'border-transparent')} style={{ background: c.hex }}>
-            {value === c.name && (
-              <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
-                <path d="M3.5 8.5l3 3 6-7" fill="none" stroke={['Putih', 'Kuning', 'Silver'].includes(c.name) ? '#18364A' : '#fff'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </span>
+    <div className="flex flex-col gap-2.5">
+      <div role="radiogroup" aria-label="Warna dominan" className="flex flex-wrap items-center gap-1.5">
+        {COLORS.map((c) => {
+          const active = value === c.name && !showCustom
+          return (
+            <button
+              key={c.name}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={c.name}
+              title={c.name}
+              onClick={() => {
+                setShowCustom(false)
+                onChange(c.name)
+              }}
+              className="flex size-10 items-center justify-center rounded-full"
+            >
+              <span
+                className={cx(
+                  'flex size-8 items-center justify-center rounded-full border',
+                  active ? 'ring-2 ring-primary ring-offset-2' : '',
+                  c.name === 'Putih' ? 'border-[#cfd8de]' : 'border-transparent',
+                )}
+                style={{ background: c.hex }}
+              >
+                {active && (
+                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke={['Putih', 'Kuning', 'Silver'].includes(c.name) ? '#18364A' : '#fff'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => {
+            setShowCustom(true)
+            if (customName.trim()) onChange(customName.trim())
+          }}
+          className={cx(
+            'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors',
+            showCustom || (!isPreset && !!value)
+              ? 'border-primary bg-tint text-primary ring-2 ring-primary/30'
+              : 'border-dashed border-accent bg-white text-primary hover:bg-tint',
+          )}
+        >
+          <Plus className="size-3.5" aria-hidden />
+          {!isPreset && value ? `Warna: ${value}` : 'Pilih / Isi Warna Lain'}
         </button>
-      ))}
+      </div>
+
+      {(showCustom || (!isPreset && !!value)) && (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-line bg-[#f6fafc] p-2.5">
+          <label className="relative flex size-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-line bg-white shadow-sm" title="Pilih dari Color Picker">
+            <input
+              type="color"
+              value={customHex}
+              onChange={(e) => {
+                setCustomHex(e.target.value)
+                if (!customName.trim()) {
+                  const label = `Kustom (${e.target.value.toUpperCase()})`
+                  setCustomName(label)
+                  onChange(label)
+                }
+              }}
+              className="absolute inset-0 size-12 -translate-x-1 -translate-y-1 cursor-pointer border-0 p-0 opacity-0"
+            />
+            <span className="size-6 rounded-lg border border-black/10" style={{ background: customHex }} />
+          </label>
+          <input
+            type="text"
+            value={customName}
+            onChange={(e) => {
+              setCustomName(e.target.value)
+              onChange(e.target.value)
+            }}
+            placeholder="Ketik warna (misal: Ungu, Rose Gold, Abu-abu, Krem)"
+            className={inputCls() + ' h-10 flex-1 bg-white text-xs'}
+          />
+        </div>
+      )}
     </div>
   )
 }

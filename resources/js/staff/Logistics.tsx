@@ -4,6 +4,7 @@ import { SHIPMENTS, type Shipment } from '../lib/data'
 import { Badge, Banner, Button, EmptyState, Field, inputCls, useToast } from '../lib/ui'
 import { Modal, PageHead, Panel, Tabs, td, th } from './common'
 import { staffApi } from '../lib/api'
+import { downloadPdfDocument } from '../lib/export'
 
 export function ShippingQueuePage() {
   const toast = useToast()
@@ -210,7 +211,28 @@ export function ShippingQueuePage() {
                 Salin
               </Button>
             </div>
-            <Button variant="outline" icon={Printer} onClick={() => toast('Label Barcode siap dicetak.')}>
+            <Button
+              variant="outline"
+              icon={Printer}
+              onClick={() => {
+                downloadPdfDocument({
+                  filename: `Label_Pengiriman_${awb}.pdf`,
+                  title: `LABEL PENGIRIMAN EKSPEDISI #${awb}`,
+                  subtitle: 'LoFound Logistik - KAI Commuter Lost & Found',
+                  badge: 'SIAP KIRIM',
+                  rows: [
+                    ['Nomor Resi (AWB)', awb],
+                    ['Nomor Laporan', open?.no || '-'],
+                    ['Nama Penerima', open?.recipient || '-'],
+                    ['Jasa Kurir', open?.courier || 'KAI Logistik Express'],
+                    ['Alamat Tujuan', open?.dest || '-'],
+                    ['Status Ongkir', `LUNAS (${open?.paid || '-'})`],
+                  ],
+                  footerNote: 'Tempelkan label ini pada paket barang temuan sebelum diserahkan ke kurir ekspedisi.',
+                })
+                toast(`Label_Pengiriman_${awb}.pdf berhasil diunduh.`)
+              }}
+            >
               Cetak Label Barcode PDF
             </Button>
           </div>

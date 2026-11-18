@@ -68,12 +68,17 @@ export function TrackingScreen({ id }: { id: string }) {
   const bastTime = findHistTime(['disetujui', 'bast']) || (phase >= 3 ? r.updated : undefined)
   const doneTime = findHistTime(['serah terima', 'ekspedisi', 'kurir', 'tiba', 'selesai']) || (s === 'selesai' || s === 'dikirim' ? r.updated : undefined)
 
+  const choseStationPickup = r.history?.some((h) => h.text.toLowerCase().includes('ambil mandiri'))
+
   const steps = [
     { t: 'Laporan Diterima', time: createdTime },
     { t: 'Dalam Pencarian Petugas', time: searchTime },
     { t: s === 'pencarian' || s === 'diterima' ? 'Kandidat Barang Cocok' : 'Kandidat Barang Cocok Ditemukan!', time: candTime },
     { t: 'Verifikasi Klaim CS & Penerbitan BAST Digital', time: bastTime },
-    { t: 'Pengambilan di Stasiun / Pengiriman Ekspedisi', time: doneTime },
+    {
+      t: s === 'dikirim' ? 'Pengiriman via Ekspedisi' : choseStationPickup ? `Pengambilan Mandiri di Posko St. ${r.to}` : 'Pengambilan di Stasiun / Pengiriman Ekspedisi',
+      time: doneTime,
+    },
   ]
   const activeIdx = s === 'diterima' ? 0 : s === 'pencarian' ? 1 : phase === 2 ? 2 : phase === 3 ? (s === 'bast' || s === 'dikirim' ? 4 : 3) : s === 'selesai' ? 5 : 2
 
@@ -153,7 +158,9 @@ export function TrackingScreen({ id }: { id: string }) {
                     {active && i === 2 && s === 'ditinjau' && <Badge tone="info" icon={Clock}>Ditinjau CS</Badge>}
                     {active && i === 2 && s === 'perlu_info' && <Badge tone="warn" icon={MessageSquareWarning}>Perlu Info</Badge>}
                     {active && i === 2 && s === 'ditolak' && <Badge tone="danger" icon={XCircle}>Belum Disetujui</Badge>}
-                    {active && i === 4 && <Badge tone="coral">Pilih Metode</Badge>}
+                    {active && i === 4 && s === 'bast' && !choseStationPickup && <Badge tone="coral">Pilih Metode</Badge>}
+                    {active && i === 4 && s === 'bast' && choseStationPickup && <Badge tone="success">Siap Diambil</Badge>}
+                    {active && i === 4 && s === 'dikirim' && <Badge tone="info">{r.awb ? 'Dalam Pengiriman' : 'Diproses Logistik'}</Badge>}
                   </div>
                   {active && activePanel(i)}
                 </li>
@@ -275,12 +282,31 @@ export function TrackingScreen({ id }: { id: string }) {
             <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
               <span>
-                Barang sedang dikirim via ekspedisi{r.awb ? ` (Resi: ${r.awb})` : ' (Menunggu nomor resi kurir)'}.
+                {r.awb
+                  ? `Barang sedang dalam perjalanan via ekspedisi (Nomor Resi: ${r.awb}).`
+                  : 'Metode pengiriman ekspedisi telah diproses & lunas. Paket sedang disiapkan oleh Petugas Logistik KAI.'}
               </span>
             </div>
+            <Button variant="cta" full icon={Ticket} onClick={() => go('shipping', { id })}>
+              Lihat Status Paket & Resi
+            </Button>
             <button onClick={refresh} className="min-h-10 rounded-xl border border-dashed border-[#b9c7d0] text-[11px] font-semibold text-muted hover:bg-tint">
               Periksa Status Pengiriman
             </button>
+          </div>
+        )
+      if (choseStationPickup)
+        return (
+          <div className="mt-3 flex flex-col gap-3">
+            <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+              <span>
+                Pengambilan mandiri di Posko CS St. {r.to} telah dikonfirmasi. Tunjukkan kode QR BAST #{r.bastCode || 'KCI-2026-089'} kepada petugas saat mengambil barang.
+              </span>
+            </div>
+            <Button variant="cta" full icon={Ticket} onClick={() => go('bast', { id })}>
+              Tampilkan Tiket & QR BAST Digital
+            </Button>
           </div>
         )
       return (
