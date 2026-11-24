@@ -103,7 +103,7 @@ export function TrackingScreen({ id }: { id: string }) {
         <section className="relative overflow-hidden rounded-[20px] bg-primary p-4 text-white">
           <div aria-hidden className="absolute -right-10 -top-10 size-32 rounded-full bg-accent/30" />
           <p className="relative text-xs font-bold tracking-wide text-white/80">#{r.id}</p>
-          <p className="relative mt-0.5 text-lg font-bold leading-6">{r.items[0].name}</p>
+          <p className="relative mt-0.5 break-words text-lg font-bold leading-6">{r.items[0].name}</p>
           {r.items.length > 1 && <p className="relative text-xs text-white/80">+{r.items.length - 1} barang lain dalam laporan ini</p>}
           <div className="relative mt-3 flex items-center gap-2 text-[13px]">
             <span className="size-3 rounded-full border-2 border-white" aria-hidden />
@@ -179,7 +179,7 @@ export function TrackingScreen({ id }: { id: string }) {
         <div className="mt-3 flex flex-col gap-2.5">
           <div className="flex items-start gap-2.5 rounded-2xl bg-tint p-3 text-[13px] leading-5 text-ink">
             <Search className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-            <span>
+            <span className="min-w-0 flex-1 break-words">
               Laporan Anda sedang dicocokkan secara internal oleh Petugas CS berdasarkan ciri rahasia Anda. Tombol klaim otomatis terbuka setelah CS menautkan kandidat yang cocok.
             </span>
           </div>
@@ -278,7 +278,7 @@ export function TrackingScreen({ id }: { id: string }) {
           <div className="mt-3 flex flex-col gap-3">
             <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-              <span>
+              <span className="min-w-0 flex-1 break-words">
                 {r.awb
                   ? `Barang sedang dalam perjalanan via ekspedisi (Nomor Resi: ${r.awb}).`
                   : 'Metode pengiriman ekspedisi telah diproses & lunas. Paket sedang disiapkan oleh Petugas Logistik KAI.'}
@@ -297,7 +297,7 @@ export function TrackingScreen({ id }: { id: string }) {
           <div className="mt-3 flex flex-col gap-3">
             <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-              <span>
+              <span className="min-w-0 flex-1 break-words">
                 Pengambilan mandiri di Posko CS St. {r.to} telah dikonfirmasi. Tunjukkan kode QR BAST #{r.bastCode || 'KCI-2026-089'} kepada petugas saat mengambil barang.
               </span>
             </div>
@@ -310,7 +310,7 @@ export function TrackingScreen({ id }: { id: string }) {
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-            Klaim disetujui. BAST Digital #{r.bastCode || 'KCI-2026-089'} sudah terbit. Pilih cara pengambilan barang.
+            <span className="min-w-0 flex-1 break-words">Klaim disetujui. BAST Digital #{r.bastCode || 'KCI-2026-089'} sudah terbit. Pilih cara pengambilan barang.</span>
           </div>
           <Button variant="cta" full icon={Ticket} onClick={() => go('bast', { id })}>
             Lihat BAST Digital & Pilih Metode
@@ -408,9 +408,9 @@ export function CandidatesScreen({ id }: { id: string }) {
                   )}
                   <CategoryBadge category={c.cat} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-ink">{c.desc}</p>
-                    <p className="text-xs text-muted">{c.found}</p>
-                    <p className="text-xs text-muted">{c.posko}</p>
+                    <p className="break-words text-sm font-bold text-ink">{c.desc}</p>
+                    <p className="break-words text-xs text-muted">{c.found}</p>
+                    <p className="break-words text-xs text-muted">{c.posko}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[#e6edf1]" aria-hidden>
                         <span className={cx('block h-full rounded-full', mm.w, mm.c)} />
@@ -617,18 +617,18 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
                 <span className="text-xs text-muted">Pastikan seluruh kartu terlihat jelas</span>
               </button>
             ) : (
-              <div className={cx('flex items-center gap-2 rounded-2xl p-2.5 pl-3', ktp === 'ok' ? 'bg-mint' : 'bg-danger-soft')}>
-                <span className={cx('flex size-9 items-center justify-center rounded-xl bg-white', ktp === 'ok' ? 'text-success' : 'text-danger')}>{ktp === 'ok' ? <Check className="size-5" aria-hidden /> : <AlertCircle className="size-5" aria-hidden />}</span>
+              <div className={cx('flex items-center gap-2 overflow-hidden rounded-2xl p-2.5 pl-3', ktp === 'ok' ? 'bg-mint' : 'bg-danger-soft')}>
+                <span className={cx('flex size-9 shrink-0 items-center justify-center rounded-xl bg-white', ktp === 'ok' ? 'text-success' : 'text-danger')}>{ktp === 'ok' ? <Check className="size-5" aria-hidden /> : <AlertCircle className="size-5" aria-hidden />}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink">{ktpMeta?.name || `KTP_${(user?.name || 'Penumpang').replace(/\s+/g, '_')}.jpg`} ({ktpMeta?.size || '1.0 MB'})</p>
                   <p className={cx('text-xs font-semibold', ktp === 'ok' ? 'text-success' : 'text-danger')}>{ktp === 'ok' ? 'Terunggah' : ktp === 'failed' ? 'Gagal mengunggah' : 'Foto kurang jelas'}</p>
                 </div>
                 {ktp === 'ok' ? (
                   <>
-                    <Button variant="ghost" size="sm" onClick={uploadKtp}>
+                    <Button variant="ghost" size="sm" className="shrink-0" onClick={uploadKtp}>
                       Ganti Foto
                     </Button>
-                    <button aria-label="Hapus foto identitas" onClick={() => setRemoveKtp(true)} className="flex size-11 items-center justify-center rounded-full text-muted hover:bg-white">
+                    <button aria-label="Hapus foto identitas" onClick={() => setRemoveKtp(true)} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-white">
                       <X className="size-4" aria-hidden />
                     </button>
                   </>
@@ -706,9 +706,9 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
             <p className="mb-1.5 text-xs font-semibold text-muted">Upload Bukti Tambahan (opsional, maks 3 file)</p>
             <div className="flex flex-wrap gap-2">
               {extras.map((x) => (
-                <span key={x} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-tint pl-3 pr-1 text-xs font-semibold text-primary">
-                  {x}
-                  <button aria-label={`Hapus ${x}`} onClick={() => setExtras((e) => e.filter((y) => y !== x))} className="flex size-7 items-center justify-center rounded-full hover:bg-white">
+                <span key={x} className="inline-flex h-9 max-w-full items-center gap-1.5 rounded-full bg-tint pl-3 pr-1 text-xs font-semibold text-primary">
+                  <span className="truncate">{x}</span>
+                  <button aria-label={`Hapus ${x}`} onClick={() => setExtras((e) => e.filter((y) => y !== x))} className="flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-white">
                     <X className="size-3.5" aria-hidden />
                   </button>
                 </span>

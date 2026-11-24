@@ -43,13 +43,13 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-[
       <div className="lf-fade absolute inset-0 bg-[#0d2433]/50" onClick={onClose} aria-hidden />
       <div role="dialog" aria-modal="true" aria-labelledby={id} className={cx('lf-pop relative flex max-h-[92vh] w-full flex-col rounded-[24px] bg-white shadow-2xl', width)}>
         <div className="flex items-start gap-3 border-b border-line px-6 py-4">
-          <div className="flex-1">
-            <h2 id={id} className="text-lg font-bold text-ink">
+          <div className="min-w-0 flex-1">
+            <h2 id={id} className="break-words text-lg font-bold text-ink">
               {title}
             </h2>
-            {sub && <p className="text-[13px] text-muted">{sub}</p>}
+            {sub && <p className="break-words text-[13px] text-muted">{sub}</p>}
           </div>
-          <IconButton icon={X} label="Tutup" onClick={onClose} className="-mr-2 text-muted hover:bg-tint" />
+          <IconButton icon={X} label="Tutup" onClick={onClose} className="-mr-2 shrink-0 text-muted hover:bg-tint" />
         </div>
         <div className="overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
@@ -72,10 +72,10 @@ export function Drawer({ open, onClose, title, children, footer }: { open: boole
       <div className="lf-fade absolute inset-0 bg-[#0d2433]/45" onClick={onClose} aria-hidden />
       <aside role="dialog" aria-modal="true" aria-labelledby={id} className="relative flex h-full w-full max-w-[560px] flex-col bg-white shadow-2xl" style={{ animation: 'lf-fade .2s' }}>
         <div className="flex items-center gap-3 border-b border-line px-6 py-4">
-          <h2 id={id} className="flex-1 text-lg font-bold text-ink">
+          <h2 id={id} className="min-w-0 flex-1 truncate text-lg font-bold text-ink">
             {title}
           </h2>
-          <IconButton icon={X} label="Tutup" onClick={onClose} className="text-muted hover:bg-tint" />
+          <IconButton icon={X} label="Tutup" onClick={onClose} className="shrink-0 text-muted hover:bg-tint" />
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
@@ -87,9 +87,9 @@ export function Drawer({ open, onClose, title, children, footer }: { open: boole
 export function PageHead({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end gap-4">
-      <div className="flex-1">
-        <h1 className="text-[28px] font-bold leading-9 text-ink">{title}</h1>
-        {sub && <p className="text-sm text-muted">{sub}</p>}
+      <div className="min-w-0 flex-1">
+        <h1 className="break-words text-[28px] font-bold leading-9 text-ink">{title}</h1>
+        {sub && <p className="break-words text-sm text-muted">{sub}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

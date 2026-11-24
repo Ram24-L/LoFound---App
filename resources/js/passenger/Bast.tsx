@@ -75,21 +75,21 @@ export function BastScreen({ id }: { id: string }) {
               </Badge>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 rounded-2xl bg-tint/60 p-3">
-              <div className="col-span-2">
+              <div className="col-span-2 min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">Pemilik</dt>
-                <dd className="text-sm font-bold text-ink">{user?.full || user?.name || 'Penumpang KRL'}</dd>
+                <dd className="break-words text-sm font-bold text-ink">{user?.full || user?.name || 'Penumpang KRL'}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">NIK</dt>
                 <dd className="text-sm font-bold tabular-nums text-ink">3201************</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">Barang</dt>
                 <dd className="truncate text-sm font-bold text-ink">{r.items[0]?.name.split(' +')[0] || 'Barang'}</dd>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">Lokasi Simpan</dt>
-                <dd className="text-sm font-bold text-ink">Posko CS St. {r.to}</dd>
+                <dd className="break-words text-sm font-bold text-ink">Posko CS St. {r.to}</dd>
               </div>
             </dl>
           </div>
@@ -107,7 +107,7 @@ export function BastScreen({ id }: { id: string }) {
               </span>
             </button>
             <p className="text-xs text-muted">Kode BAST / QR</p>
-            <p className="font-mono text-base font-bold tracking-[0.2em] text-ink">{qrCode}</p>
+            <p className="max-w-full break-all text-center font-mono text-base font-bold tracking-[0.2em] text-ink">{qrCode}</p>
             <p className="text-[11px] font-semibold text-success">Tersedia offline</p>
             <div className="mt-1 grid w-full grid-cols-2 gap-2">
               <Button
@@ -216,8 +216,8 @@ export function BastScreen({ id }: { id: string }) {
             <X className="size-5" aria-hidden />
           </button>
           <p className="flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-xs font-bold text-success">☀ Kecerahan layar dinaikkan</p>
-          <QRCode value="KCI-2026-089" size={280} />
-          <p className="font-mono text-xl font-bold tracking-[0.25em] text-ink">KCI-089-7QX2</p>
+          <QRCode value={qrCode} size={280} />
+          <p className="max-w-full break-all text-center font-mono text-xl font-bold tracking-[0.25em] text-ink">{qrCode}</p>
           <p className="text-base font-bold text-ink">Tunjukkan ke petugas</p>
         </div>
       )}
@@ -392,9 +392,9 @@ export function ShippingScreen({ id }: { id: string }) {
           <section className="rounded-[20px] border border-line bg-white p-4">
             <p className="text-xs font-semibold text-muted">Nomor Resi Kurir • {courier}</p>
             <div className="mt-1 flex items-center gap-2">
-              <p className="flex-1 font-mono text-[15px] font-bold tracking-wide text-ink">{realAwb}</p>
+              <p className="min-w-0 flex-1 break-all font-mono text-[15px] font-bold tracking-wide text-ink">{realAwb}</p>
               {r?.awb && (
-                <Button variant="tint" size="sm" icon={Copy} onClick={() => toast('Nomor resi disalin.')}>
+                <Button variant="tint" size="sm" className="shrink-0" icon={Copy} onClick={() => toast('Nomor resi disalin.')}>
                   Salin
                 </Button>
               )}

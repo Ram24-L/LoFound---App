@@ -389,16 +389,20 @@ export function WizardScreen() {
                 <p className="mb-1.5 text-xs font-semibold text-muted">Upload Foto Referensi</p>
                 <input ref={fileRef} type="file" accept="image/*" className="sr-only" aria-label="Pilih foto referensi" onChange={(e) => onPhoto(e.target.files?.[0])} />
                 {photo ? (
-                  <div className="flex items-center gap-3 rounded-2xl bg-tint p-3">
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-white text-primary">
-                      <ImageIcon className="size-5" aria-hidden />
-                    </span>
+                  <div className="flex items-center gap-3 overflow-hidden rounded-2xl bg-tint p-3">
+                    {photoUrl ? (
+                      <img src={photoUrl} alt="Foto referensi" className="size-11 shrink-0 rounded-xl border border-line bg-white object-cover" />
+                    ) : (
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-primary">
+                        <ImageIcon className="size-5" aria-hidden />
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink">{photo.name}</p>
                       <p className="text-xs text-muted">{photo.size}</p>
                     </div>
-                    <Check className="size-5 text-success" aria-label="Terunggah" />
-                    <button aria-label="Hapus foto" onClick={() => setPhoto(null)} className="flex size-11 items-center justify-center rounded-full text-muted hover:bg-white">
+                    <Check className="size-5 shrink-0 text-success" aria-label="Terunggah" />
+                    <button aria-label="Hapus foto" onClick={() => (setPhoto(null), setPhotoUrl(null))} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-white">
                       <X className="size-4" aria-hidden />
                     </button>
                   </div>
@@ -456,7 +460,7 @@ export function WizardScreen() {
                 <p className="truncate text-sm font-bold text-ink">
                   #{dup.id} • {dup.items[0]?.name || 'Barang'}
                 </p>
-                <p className="text-xs text-muted">
+                <p className="truncate text-xs text-muted">
                   {dup.from} ⟶ {dup.to} • {dup.date}, {dup.time}
                 </p>
                 <Badge tone={STATUS_META[dup.status].tone} className="mt-1.5">

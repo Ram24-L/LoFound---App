@@ -166,7 +166,7 @@ export function Banner({ tone = 'info', icon: Icon, children, className, action 
   return (
     <div role={tone === 'danger' ? 'alert' : undefined} className={cx('flex items-start gap-2.5 rounded-2xl p-3 text-[13px] leading-5', toneStyles[tone], className)}>
       {Icon && <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />}
-      <div className="flex-1">{children}</div>
+      <div className="min-w-0 flex-1 break-words">{children}</div>
       {action}
     </div>
   )
@@ -227,7 +227,7 @@ export function Toggle({ checked, onChange, label, description, disabled }: { ch
   const id = useId()
   return (
     <div className={cx('flex items-center gap-3', disabled && 'opacity-60')}>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <label htmlFor={id} className="block text-sm font-semibold text-ink">
           {label}
         </label>

@@ -137,7 +137,7 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
               <div className="flex flex-col gap-2 rounded-2xl bg-mint p-3 text-sm text-[#1f7a4a]">
                 <div className="flex items-center gap-3">
                   <MailCheck className="size-5 shrink-0" aria-hidden />
-                  <span>Masukkan 6 digit kode verifikasi yang dikirim ke <b>{f.contact}</b>.</span>
+                  <span className="min-w-0 flex-1 break-words">Masukkan 6 digit kode verifikasi yang dikirim ke <b className="break-all">{f.contact}</b>.</span>
                 </div>
                 {devOtp && (
                   <p className="rounded-xl bg-white/80 px-3 py-1.5 text-xs font-bold text-primary">

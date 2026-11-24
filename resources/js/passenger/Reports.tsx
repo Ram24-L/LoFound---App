@@ -320,12 +320,12 @@ export function DetailScreen({ id }: { id: string }) {
             <div key={it.sub} className={cx('flex items-center gap-3', i > 0 && 'mt-3 border-t border-line pt-3')}>
               <CategoryBadge category={it.category} size={40} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-ink">{it.name}</p>
-                <p className="text-xs text-muted">
+                <p className="break-words text-sm font-bold text-ink">{it.name}</p>
+                <p className="break-words text-xs text-muted">
                   #{r.id}-{it.sub} • {it.category} • {it.color}
                 </p>
               </div>
-              <span className="size-5 rounded-full border border-line" style={{ background: COLORS.find((c) => c.name === it.color)?.hex }} aria-hidden />
+              <span className="size-5 shrink-0 rounded-full border border-line" style={{ background: COLORS.find((c) => c.name === it.color)?.hex }} aria-hidden />
             </div>
           ))}
         </DetailCard>
@@ -350,21 +350,31 @@ export function DetailScreen({ id }: { id: string }) {
             </Button>
           }
         >
-          <p className={cx('rounded-xl bg-tint p-3 text-sm leading-5', reveal ? 'text-ink' : 'select-none text-primary/60 tracking-[0.2em]')}>{reveal ? r.secret : '•••••••••••••••••••••••••••'}</p>
+          <p className={cx('break-words rounded-xl bg-tint p-3 text-sm leading-5', reveal ? 'text-ink' : 'select-none text-primary/60 tracking-[0.2em]')}>{reveal ? r.secret : '•••••••••••••••••••••••••••'}</p>
           <p className="mt-2 text-xs text-muted">Hanya dilihat Petugas CS saat verifikasi klaim.</p>
         </DetailCard>
         <DetailCard title="Foto Referensi">
-          {r.photo ? (
-            <div className="flex items-center gap-3 rounded-xl bg-tint p-3">
-              <span className="flex size-12 items-center justify-center rounded-xl bg-white text-primary">
-                <ImageIcon className="size-5" aria-hidden />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-ink">{r.photo}</p>
-                <p className="text-xs text-muted">Hanya terlihat oleh Anda dan petugas.</p>
+          {r.photo ? (() => {
+            const fileName = r.photo.split('/').pop() || r.photo
+            const isImageUrl = r.photo.startsWith('/storage/') || r.photo.startsWith('/api/') || r.photo.startsWith('http')
+            return (
+              <div className="flex items-center gap-3 overflow-hidden rounded-xl bg-tint p-3">
+                {isImageUrl ? (
+                  <a href={r.photo} target="_blank" rel="noreferrer" className="shrink-0 overflow-hidden rounded-xl border border-line bg-white">
+                    <img src={r.photo} alt="Foto referensi barang" className="size-12 object-cover" />
+                  </a>
+                ) : (
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white text-primary">
+                    <ImageIcon className="size-5" aria-hidden />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink" title={fileName}>{fileName}</p>
+                  <p className="text-xs text-muted">Hanya terlihat oleh Anda dan petugas.</p>
+                </div>
               </div>
-            </div>
-          ) : (
+            )
+          })() : (
             <p className="text-sm text-muted">Tidak ada foto referensi.</p>
           )}
         </DetailCard>
@@ -379,7 +389,7 @@ export function DetailScreen({ id }: { id: string }) {
             {r.history.map((h, i) => (
               <li key={i} className="flex gap-3 text-sm">
                 <span className="w-12 shrink-0 font-bold tabular-nums text-ink">{h.t}</span>
-                <span className="text-muted">{h.text}</span>
+                <span className="min-w-0 flex-1 break-words text-muted">{h.text}</span>
               </li>
             ))}
           </ol>
@@ -406,7 +416,7 @@ export function DetailScreen({ id }: { id: string }) {
 
 function DetailCard({ title, children, action }: { title: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <section className="rounded-[20px] border border-line bg-white p-4">
+    <section className="overflow-hidden rounded-[20px] border border-line bg-white p-4">
       <SectionTitle action={action}>{title}</SectionTitle>
       {children}
     </section>

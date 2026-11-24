@@ -79,10 +79,10 @@ export function NotificationsScreen() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <span className="flex-1 text-sm font-bold text-ink">{n.title}</span>
-                  {n.unread && <span className="size-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
+                  <span className="min-w-0 flex-1 break-words text-sm font-bold text-ink">{n.title}</span>
+                  {n.unread && <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-label="Belum dibaca" />}
                 </span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted">{n.body}</span>
+                <span className="mt-0.5 block break-words text-xs leading-5 text-muted">{n.body}</span>
                 <span className="mt-1 flex items-center gap-1 text-[11px] text-soft">
                   <Clock className="size-3" aria-hidden /> {n.t}
                 </span>
@@ -243,10 +243,10 @@ export function ProfileScreen() {
       <header className="bg-primary px-5 pb-6 pt-5 text-white">
         <h1 className="text-[22px] font-bold">Profil</h1>
         <div className="mt-4 flex items-center gap-3">
-          <span className="flex size-14 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">{initials}</span>
-          <div>
-            <p className="text-base font-bold">{user?.full}</p>
-            <p className="text-xs text-white/80">{user?.contact}</p>
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-bold">{user?.full}</p>
+            <p className="truncate text-xs text-white/80">{user?.contact}</p>
           </div>
         </div>
       </header>
@@ -272,9 +272,9 @@ export function ProfileScreen() {
                     <div className="flex flex-col gap-3">
                       <dl className="grid grid-cols-[90px_1fr] gap-y-1.5 text-[13px]">
                         <dt>Nama</dt>
-                        <dd className="font-semibold text-ink">{user?.full}</dd>
+                        <dd className="min-w-0 break-words font-semibold text-ink">{user?.full}</dd>
                         <dt>Kontak</dt>
-                        <dd className="font-semibold text-ink">{user?.contact}</dd>
+                        <dd className="min-w-0 break-all font-semibold text-ink">{user?.contact}</dd>
                         <dt>NIK</dt>
                         <dd className="font-semibold text-ink">{user?.nik || 'Belum diisi'}</dd>
                       </dl>
@@ -342,7 +342,7 @@ export function ProfileScreen() {
                     <div className="flex flex-col gap-3">
                       {!editingAddr && user?.address?.addr ? (
                         <div className="flex items-start justify-between gap-2 rounded-xl border border-line bg-white p-3">
-                          <div className="text-[13px]">
+                          <div className="min-w-0 flex-1 break-words text-[13px]">
                             <p className="font-bold text-ink">
                               {user.address.label || 'Rumah'} • {user.address.name} ({user.address.wa})
                             </p>
@@ -350,7 +350,7 @@ export function ProfileScreen() {
                               {user.address.addr}, {user.address.city} {user.address.zip}
                             </p>
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 gap-1">
                             <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditingAddr(true)}>
                               Ubah
                             </Button>
@@ -418,11 +418,11 @@ export function ProfileScreen() {
                               </p>
                               <p className="text-[11px] text-soft">{t.date}</p>
                             </div>
-                            <Badge tone="success">{t.status === 'selesai' ? 'Selesai' : 'Lunas'}</Badge>
+                            <Badge tone="success" className="shrink-0">{t.status === 'selesai' ? 'Selesai' : 'Lunas'}</Badge>
                             <button
                               aria-label="Hapus riwayat transaksi"
                               onClick={() => handleDeleteTransaction(t.id)}
-                              className="flex size-8 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"
+                              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"
                             >
                               <Trash2 className="size-4" aria-hidden />
                             </button>

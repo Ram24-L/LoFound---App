@@ -198,10 +198,11 @@ export function ShippingQueuePage() {
               Resi Terbit
             </Badge>
             <div className="flex items-center gap-2">
-              <p className="flex-1 font-mono text-lg font-bold text-ink">{awb}</p>
+              <p className="min-w-0 flex-1 break-all font-mono text-lg font-bold text-ink">{awb}</p>
               <Button
                 size="sm"
                 variant="tint"
+                className="shrink-0"
                 icon={Copy}
                 onClick={() => {
                   navigator.clipboard?.writeText(awb)

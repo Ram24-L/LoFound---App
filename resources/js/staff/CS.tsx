@@ -333,13 +333,13 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
               onChange={(e) => handlePhotoUpload(e.target.files?.[0])}
             />
             {f.photo_url ? (
-              <div className="flex items-center gap-3 rounded-2xl bg-white p-3 border border-line">
-                <img src={f.photo_url} alt="Foto Barang" className="size-14 rounded-xl object-cover" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-ink truncate">Foto barang tersimpan</p>
+              <div className="flex items-center gap-3 overflow-hidden rounded-2xl border border-line bg-white p-3">
+                <img src={f.photo_url} alt="Foto Barang" className="size-14 shrink-0 rounded-xl object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-bold text-ink">Foto barang tersimpan</p>
                   <p className="text-[11px] text-muted">Aman di posko CS</p>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => fileRef.current?.click()}>Ganti</Button>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => fileRef.current?.click()}>Ganti</Button>
               </div>
             ) : (
               <button
@@ -505,30 +505,39 @@ export function ItemDetailPage() {
             ))}
           </dl>
         </Panel>
-        <section className="rounded-2xl border border-[#bfe0ee] bg-tint p-5">
+        <section className="min-w-0 rounded-2xl border border-[#bfe0ee] bg-tint p-5">
           <h2 className="mb-1 flex items-center gap-2 text-[15px] font-bold text-ink">
-            <Lock className="size-4 text-primary" aria-hidden /> Detail Rahasia Gudang
+            <Lock className="size-4 shrink-0 text-primary" aria-hidden /> Detail Rahasia Gudang
           </h2>
           <p className="mb-4 text-xs font-semibold text-primary-dark">Tidak ditampilkan ke publik.</p>
-          <div className="mb-4 flex h-40 items-center justify-center rounded-xl bg-white/80 text-sm font-semibold text-muted">
-            <Camera className="mr-2 size-5" aria-hidden /> Foto asli gudang (khusus petugas)
-          </div>
+          {(() => {
+            const secretPhoto = (item.secret as any)?.photo
+            return secretPhoto && (secretPhoto.startsWith('/storage/') || secretPhoto.startsWith('http')) ? (
+              <a href={secretPhoto} target="_blank" rel="noreferrer" className="mb-4 block overflow-hidden rounded-xl border border-line bg-white">
+                <img src={secretPhoto} alt={item.name} className="h-40 w-full object-cover" />
+              </a>
+            ) : (
+              <div className="mb-4 flex h-40 items-center justify-center rounded-xl bg-white/80 text-sm font-semibold text-muted">
+                <Camera className="mr-2 size-5" aria-hidden /> Foto asli gudang (khusus petugas)
+              </div>
+            )
+          })()}
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            <div className="col-span-2">
+            <div className="col-span-2 min-w-0">
               <dt className="text-xs text-muted">Detail</dt>
-              <dd className="font-semibold">{item.secret.detail}</dd>
+              <dd className="break-words font-semibold">{item.secret.detail}</dd>
             </div>
-            <div>
+            <div className="min-w-0">
               <dt className="text-xs text-muted">Nomor Seri</dt>
-              <dd className="font-mono font-semibold">{item.secret.serial}</dd>
+              <dd className="break-all font-mono font-semibold">{item.secret.serial}</dd>
             </div>
-            <div>
+            <div className="min-w-0">
               <dt className="text-xs text-muted">Lokasi Loker</dt>
-              <dd className="font-semibold">{item.secret.locker}</dd>
+              <dd className="break-words font-semibold">{item.secret.locker}</dd>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-2 min-w-0">
               <dt className="text-xs text-muted">Catatan CS</dt>
-              <dd className="font-semibold">{item.secret.notes}</dd>
+              <dd className="break-words font-semibold">{item.secret.notes}</dd>
             </div>
           </dl>
         </section>
@@ -552,11 +561,11 @@ export function ItemDetailPage() {
             <ul className="flex flex-col p-2">
               {activeReports.slice(0, 3).map((r) => (
                 <li key={r.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-tint/50">
-                  <div className="flex-1">
-                    <p className="text-sm font-bold">{r.id}</p>
-                    <p className="text-xs text-muted">{r.who} • {r.desc}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{r.id}</p>
+                    <p className="truncate text-xs text-muted">{r.who} • {r.desc}</p>
                   </div>
-                  <Badge tone={r.score === 'Tinggi' ? 'success' : 'warn'}>{r.score}</Badge>
+                  <Badge tone={r.score === 'Tinggi' ? 'success' : 'warn'} className="shrink-0">{r.score}</Badge>
                 </li>
               ))}
             </ul>
@@ -589,18 +598,19 @@ export function ItemDetailPage() {
           {activeReports.map((r) => (
             <li key={r.id} className="flex items-center gap-3 rounded-xl border border-line p-3">
               <CategoryBadge category={item.cat} size={36} />
-              <div className="flex-1">
-                <p className="text-sm font-bold">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">
                   {r.id} • {r.desc}
                 </p>
-                <p className="text-xs text-muted">
+                <p className="truncate text-xs text-muted">
                   {r.who} • {r.route}
                 </p>
               </div>
-              <Badge tone={r.score === 'Tinggi' ? 'success' : 'warn'}>{r.score}</Badge>
+              <Badge tone={r.score === 'Tinggi' ? 'success' : 'warn'} className="shrink-0">{r.score}</Badge>
               <Button
                 size="sm"
                 icon={Link2}
+                className="shrink-0"
                 disabled={linked === r.id}
                 onClick={() => handleManualMatch(r.id)}
               >
@@ -918,45 +928,45 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
             </Banner>
           )}
           <div className="grid grid-cols-[1fr_260px_1fr] gap-4">
-          <section className="rounded-2xl border-2 border-primary bg-white p-4">
+          <section className="min-w-0 rounded-2xl border-2 border-primary bg-white p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
-              <UserCheck className="size-4 text-primary" aria-hidden /> Detail Klaim, Dokumen & Jawaban Penumpang
+              <UserCheck className="size-4 shrink-0 text-primary" aria-hidden /> Detail Klaim, Dokumen & Jawaban Penumpang
             </h3>
             <dl className="flex flex-col gap-2.5 text-[13px]">
               <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#f6fafc] p-2.5">
-                <div>
+                <div className="min-w-0">
                   <dt className="text-[11px] text-muted">Pelapor</dt>
-                  <dd className="font-bold text-ink">{claim.reporterFull || claim.reporter}</dd>
-                  {claim.reporterContact && <dd className="text-[11px] text-muted">{claim.reporterContact}</dd>}
+                  <dd className="break-words font-bold text-ink">{claim.reporterFull || claim.reporter}</dd>
+                  {claim.reporterContact && <dd className="break-all text-[11px] text-muted">{claim.reporterContact}</dd>}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <dt className="text-[11px] text-muted">NIK Identitas</dt>
-                  <dd className="font-mono font-bold text-ink">{claim.nik || 'Belum dicantumkan'}</dd>
+                  <dd className="break-all font-mono font-bold text-ink">{claim.nik || 'Belum dicantumkan'}</dd>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div>
+                <div className="min-w-0">
                   <dt className="text-xs text-muted">Kategori & Nama Barang</dt>
                   <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 font-bold text-ink">
                     <Badge tone={(claim.category || item?.cat) === 'Uang Tunai' ? 'warn' : (claim.category || item?.cat) === 'Non Elektronik' ? 'neutral' : 'info'}>
                       {claim.category || item?.cat || 'Elektronik'}
                     </Badge>
-                    <span>{claim.item}</span>
+                    <span className="break-words">{claim.item}</span>
                   </dd>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <dt className="text-xs text-muted">Rute & Waktu Kejadian</dt>
-                  <dd className="mt-0.5 font-semibold text-ink">{claim.route || `St. ${item.station}`}</dd>
-                  <dd className="text-[11px] text-muted">{claim.incidentTime || claim.submitted} • {claim.position || 'Gerbong KRL'}</dd>
+                  <dd className="mt-0.5 break-words font-semibold text-ink">{claim.route || `St. ${item.station}`}</dd>
+                  <dd className="break-words text-[11px] text-muted">{claim.incidentTime || claim.submitted} • {claim.position || 'Gerbong KRL'}</dd>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-line p-2.5">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <dt className="text-[11px] font-semibold text-muted">Foto Identitas (KTP)</dt>
-                    <Badge tone={claim.ktpPhoto ? 'success' : 'neutral'}>{claim.ktpPhoto ? 'Terunggah' : 'Belum Ada'}</Badge>
+                <div className="min-w-0 overflow-hidden rounded-xl border border-line p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between gap-1">
+                    <dt className="truncate text-[11px] font-semibold text-muted">Foto Identitas (KTP)</dt>
+                    <Badge tone={claim.ktpPhoto ? 'success' : 'neutral'} className="shrink-0">{claim.ktpPhoto ? 'Terunggah' : 'Belum Ada'}</Badge>
                   </div>
                   {claim.ktpPhoto ? (
                     claim.ktpPhoto.startsWith('/storage/') || claim.ktpPhoto.startsWith('/api/private-files/') || claim.ktpPhoto.startsWith('http') ? (
@@ -964,9 +974,9 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
                         <img src={claim.ktpPhoto} alt="KTP Penumpang" className="h-24 w-full object-cover hover:opacity-90" />
                       </a>
                     ) : (
-                      <div className="flex h-20 flex-col items-center justify-center rounded-lg bg-mint/60 px-2 text-center text-xs font-semibold text-success">
-                        <CheckCircle2 className="mb-1 size-4" aria-hidden />
-                        <span className="w-full truncate">{claim.ktpPhoto}</span>
+                      <div className="flex h-20 min-w-0 flex-col items-center justify-center rounded-lg bg-mint/60 px-2 text-center text-xs font-semibold text-success">
+                        <CheckCircle2 className="mb-1 size-4 shrink-0" aria-hidden />
+                        <span className="w-full truncate">{claim.ktpPhoto.split('/').pop() || claim.ktpPhoto}</span>
                       </div>
                     )
                   ) : (
@@ -976,10 +986,10 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
                   )}
                 </div>
 
-                <div className="rounded-xl border border-line p-2.5">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <dt className="text-[11px] font-semibold text-muted">Foto Referensi Barang</dt>
-                    <Badge tone={claim.referencePhoto ? 'info' : 'neutral'}>{claim.referencePhoto ? 'Ada Foto' : 'Tidak Ada'}</Badge>
+                <div className="min-w-0 overflow-hidden rounded-xl border border-line p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between gap-1">
+                    <dt className="truncate text-[11px] font-semibold text-muted">Foto Referensi Barang</dt>
+                    <Badge tone={claim.referencePhoto ? 'info' : 'neutral'} className="shrink-0">{claim.referencePhoto ? 'Ada Foto' : 'Tidak Ada'}</Badge>
                   </div>
                   {claim.referencePhoto ? (
                     claim.referencePhoto.startsWith('/storage/') || claim.referencePhoto.startsWith('http') ? (
@@ -987,9 +997,9 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
                         <img src={claim.referencePhoto} alt="Foto Referensi Penumpang" className="h-24 w-full object-cover hover:opacity-90" />
                       </a>
                     ) : (
-                      <div className="flex h-20 flex-col items-center justify-center rounded-lg bg-tint px-2 text-center text-xs font-semibold text-primary">
-                        <Camera className="mb-1 size-4" aria-hidden />
-                        <span className="w-full truncate">{claim.referencePhoto}</span>
+                      <div className="flex h-20 min-w-0 flex-col items-center justify-center rounded-lg bg-tint px-2 text-center text-xs font-semibold text-primary">
+                        <Camera className="mb-1 size-4 shrink-0" aria-hidden />
+                        <span className="w-full truncate">{claim.referencePhoto.split('/').pop() || claim.referencePhoto}</span>
                       </div>
                     )
                   ) : (
@@ -1000,9 +1010,9 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
                 </div>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <dt className="text-xs text-muted">Jawaban Ciri Rahasia Penumpang</dt>
-                <dd className="mt-1 rounded-xl bg-tint p-2.5 leading-5 text-ink font-medium">
+                <dd className="mt-1 break-words rounded-xl bg-tint p-2.5 font-medium leading-5 text-ink">
                   {claim.answer || 'Tidak ada catatan ciri rahasia tambahan.'}
                 </dd>
               </div>
@@ -1092,9 +1102,9 @@ function WarehouseCard({ item }: { item?: InvItem }) {
   if (!item) return null
   const secretPhoto = (item.secret as any)?.photo
   return (
-    <section className="rounded-2xl bg-tint p-4">
+    <section className="min-w-0 rounded-2xl bg-tint p-4">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
-        <Lock className="size-4 text-primary" aria-hidden /> Data Rahasia Gudang
+        <Lock className="size-4 shrink-0 text-primary" aria-hidden /> Data Rahasia Gudang
       </h3>
       {secretPhoto && (secretPhoto.startsWith('/storage/') || secretPhoto.startsWith('http')) ? (
         <a href={secretPhoto} target="_blank" rel="noreferrer" className="mb-3 block overflow-hidden rounded-xl border border-line bg-white">
@@ -1106,19 +1116,19 @@ function WarehouseCard({ item }: { item?: InvItem }) {
         </div>
       )}
       <dl className="flex flex-col gap-2 text-[13px]">
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs text-muted">Catatan Rahasia CS</dt>
-          <dd className="font-semibold leading-5">
+          <dd className="break-words font-semibold leading-5">
             {item.secret.detail}. {item.secret.notes}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs text-muted">Nomor Seri</dt>
-          <dd className="font-mono font-bold">{item.secret.serial}</dd>
+          <dd className="break-all font-mono font-bold">{item.secret.serial}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs text-muted">Lokasi Loker</dt>
-          <dd className="font-bold">
+          <dd className="break-words font-bold">
             {item.secret.locker} • St. {item.station}
           </dd>
         </div>

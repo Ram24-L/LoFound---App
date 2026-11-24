@@ -1,6 +1,7 @@
 *.log
 .DS_Store
 .env
+.env.local
 .env.backup
 .env.production
 .phpactor.json
@@ -36,3 +37,4 @@ Thumbs.db
 
 /storage/app/public/*
 !/storage/app/public/.gitignore
+.neon
