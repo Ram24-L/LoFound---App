@@ -89,29 +89,33 @@ jobs:
 
       - name: Sync Laravel app to ~/lofound-app
         run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=no" \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='node_modules' \
-            --exclude='.env' \
-            --exclude='.env.*' \
-            --exclude='.neon' \
-            --exclude='neon.ts' \
-            --exclude='storage/' \
-            --exclude='public/hot' \
-            --exclude='tests/' \
-            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:~/lofound-app/"
+          set -o pipefail
+          tar -czf - \
+            --exclude='./.git' \
+            --exclude='./.github' \
+            --exclude='./node_modules' \
+            --exclude='./.env' \
+            --exclude='./.env.*' \
+            --exclude='./.neon' \
+            --exclude='./neon.ts' \
+            --exclude='./storage' \
+            --exclude='./public/hot' \
+            --exclude='./tests' \
+            . | ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              'rm -rf ~/lofound-app/app ~/lofound-app/config ~/lofound-app/database ~/lofound-app/resources ~/lofound-app/routes ~/lofound-app/public/build && tar -xzf - -C ~/lofound-app'
 
       - name: Sync public assets to ~/public_html
         run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=no" \
-            --exclude='storage' \
-            --exclude='.well-known' \
-            --exclude='cgi-bin' \
-            --exclude='error_log' \
-            /tmp/public_html_stage/ "${DEPLOY_USER}@${DEPLOY_HOST}:~/public_html/"
+          set -o pipefail
+          tar -czf - \
+            --exclude='./storage' \
+            --exclude='./.well-known' \
+            --exclude='./cgi-bin' \
+            --exclude='./error_log' \
+            -C /tmp/public_html_stage . | ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              'rm -rf ~/public_html/build && tar -xzf - -C ~/public_html'
 
       - name: Run remote Laravel post-deploy tasks
         run: |
