@@ -54,29 +54,40 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USER" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
+          CLEAN_HOST=$(printf '%s' "$SSH_HOST" | tr -d '[:space:]' | sed -E 's|^https?://||; s|/.*$||; s|:[0-9]+$||')
+          CLEAN_USER=$(printf '%s' "$SSH_USER" | tr -d '[:space:]')
+          CLEAN_PORT=$(printf '%s' "$SSH_PORT" | tr -cd '0-9')
+          CLEAN_PORT=${CLEAN_PORT:-22}
+
+          if [ -z "$CLEAN_HOST" ] || [ -z "$CLEAN_USER" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
             echo "ERROR: SSH_HOST, SSH_USER, and SSH_PRIVATE_KEY secrets must be set."
             exit 1
           fi
+          case "$CLEAN_HOST" in
+            *.*) ;;
+            *)
+              echo "ERROR: SSH_HOST must be an IP address (e.g. 103.x.x.x) or full domain (e.g. lofound.web.id), not a single-word hostname like 'server'."
+              exit 1
+              ;;
+          esac
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "DEPLOY_PORT=${SSH_PORT:-22}" >> "$GITHUB_ENV"
+          echo "::add-mask::$CLEAN_HOST"
+          echo "::add-mask::$CLEAN_USER"
+          echo "DEPLOY_HOST=$CLEAN_HOST" >> "$GITHUB_ENV"
+          echo "DEPLOY_USER=$CLEAN_USER" >> "$GITHUB_ENV"
+          echo "DEPLOY_PORT=$CLEAN_PORT" >> "$GITHUB_ENV"
 
       - name: Ensure server directories exist
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
             'mkdir -p ~/lofound-app/storage/app/public ~/lofound-app/storage/app/private/ktp ~/lofound-app/storage/framework/cache/data ~/lofound-app/storage/framework/sessions ~/lofound-app/storage/framework/views ~/lofound-app/storage/logs ~/lofound-app/bootstrap/cache ~/public_html'
 
       - name: Sync Laravel app to ~/lofound-app
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=no" \
@@ -90,12 +101,9 @@ jobs:
             --exclude='storage/' \
             --exclude='public/hot' \
             --exclude='tests/' \
-            ./ "${SSH_USER}@${SSH_HOST}:~/lofound-app/"
+            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:~/lofound-app/"
 
       - name: Sync public assets to ~/public_html
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -p $DEPLOY_PORT -o StrictHostKeyChecking=no" \
@@ -103,14 +111,11 @@ jobs:
             --exclude='.well-known' \
             --exclude='cgi-bin' \
             --exclude='error_log' \
-            /tmp/public_html_stage/ "${SSH_USER}@${SSH_HOST}:~/public_html/"
+            /tmp/public_html_stage/ "${DEPLOY_USER}@${DEPLOY_HOST}:~/public_html/"
 
       - name: Run remote Laravel post-deploy tasks
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" '
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no "${DEPLOY_USER}@${DEPLOY_HOST}" '
             set -e
             PHP_BIN="/opt/cpanel/ea-php84/root/usr/bin/php"
             cd ~/lofound-app
