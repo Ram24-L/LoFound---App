@@ -77,7 +77,7 @@ export function BastScreen({ id }: { id: string }) {
             <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 rounded-2xl bg-tint/60 p-3">
               <div className="col-span-2">
                 <dt className="text-[11px] font-semibold text-muted">Pemilik</dt>
-                <dd className="text-sm font-bold text-ink">{user?.full || user?.name || 'M. Ramdhan Maulana'}</dd>
+                <dd className="text-sm font-bold text-ink">{user?.full || user?.name || 'Penumpang KRL'}</dd>
               </div>
               <div>
                 <dt className="text-[11px] font-semibold text-muted">NIK</dt>

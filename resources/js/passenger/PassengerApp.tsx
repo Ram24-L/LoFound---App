@@ -90,7 +90,7 @@ export function PassengerApp() {
 
   const finishLogin = useCallback(
     (u?: Partial<User>) => {
-      const userData: User = { name: 'Ramdhan', full: 'M. Ramdhan Maulana', contact: 'ramdhan@mail.com', ...u }
+      const userData: User = { name: 'Penumpang', full: 'Penumpang KRL', contact: '-', ...u }
       setUser(userData)
       // Fetch reports for newly logged-in user
       reportApi.list().then(setReports).catch(() => {})
@@ -327,7 +327,7 @@ function LoginGate({
           }}
         >
           <p className="text-sm text-muted">
-            Kode dikirim via WhatsApp ke <b className="text-ink">{phone.slice(0, 4)}****{phone.slice(-3)}</b>. Gunakan 123456 untuk simulasi.
+            Kode verifikasi 6 digit telah dikirim via WhatsApp ke <b className="text-ink">{phone.slice(0, 4)}****{phone.slice(-3)}</b>.
           </p>
           <Field label="Kode OTP (6 angka)" error={err}>
             {(a) => (

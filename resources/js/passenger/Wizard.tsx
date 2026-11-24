@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, CalendarClock, Camera, Check, ChevronDown, FileClock, ImageIcon, Info, Lock, LogOut, Trash2, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, CalendarClock, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, FileClock, ImageIcon, Info, Lock, LogOut, Trash2, X } from 'lucide-react'
 import { STATUS_META, type Report } from '../lib/data'
 import { Badge, Banner, Button, CategoryBadge, cx, Dialog, Field, inputCls, Pill, RouteConnector, Sheet, Toggle, useCategories, useToast } from '../lib/ui'
 import { reportApi, uploadApi } from '../lib/api'
@@ -8,20 +8,28 @@ import { StationPicker } from './Home'
 import { ColorSwatches } from './Reports'
 import { Screen, TopBar } from './shell'
 
+const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+const MONTHS_FULL_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+
 const nowTimeStr = () => {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
-const nowDateStr = () => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
-  const d = new Date()
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+const formatIndoDate = (d: Date) => `${d.getDate()} ${MONTHS_ID[d.getMonth()]} ${d.getFullYear()}`
+const nowDateStr = () => formatIndoDate(new Date())
+const parseIndoDate = (s: string): Date => {
+  const parts = s.trim().split(/\s+/)
+  if (parts.length === 3) {
+    const day = Number(parts[0])
+    const mon = MONTHS_ID.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase())
+    const yr = Number(parts[2])
+    if (day && mon >= 0 && yr) return new Date(yr, mon, day)
+  }
+  return new Date()
 }
 
 type Item = { name: string; category: string; color: string }
 const EMPTY_ITEM: Item = { name: '', category: '', color: '' }
-const DATES = ['31 Okt 2026', '1 Nov 2026', '2 Nov 2026', '3 Nov 2026', 'Hari Ini']
-const NOW = { date: nowDateStr(), time: '23:59' }
 const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + m
@@ -36,7 +44,7 @@ export function WizardScreen() {
   const [step, setStep] = useState<1 | 2>(1)
   const [items, setItems] = useState<Item[]>([{ ...EMPTY_ITEM }])
   const [openIdx, setOpenIdx] = useState(0)
-  const [route, setRoute] = useState(() => ({ from: 'Bogor', to: 'Manggarai', date: nowDateStr(), time: nowTimeStr() }))
+  const [route, setRoute] = useState(() => ({ from: 'Bogor', to: 'Manggarai', date: '', time: '' }))
   const [position, setPosition] = useState('')
   const [secret, setSecret] = useState('')
   const [photo, setPhoto] = useState<{ name: string; size: string } | null>(null)
@@ -79,7 +87,7 @@ export function WizardScreen() {
     return Object.keys(er).length === 0
   }
   const routeErr = route.from === route.to ? 'Stasiun keberangkatan dan tujuan tidak boleh sama.' : ''
-  const timeErr = route.time && toMin(route.time) > toMin(NOW.time) ? 'Waktu tidak boleh melebihi saat ini.' : ''
+  const timeErr = route.date === nowDateStr() && route.time && toMin(route.time) > toMin(nowTimeStr()) ? 'Waktu tidak boleh melebihi saat ini.' : ''
 
   const findDupLocal = () =>
     reports.find(
@@ -131,6 +139,11 @@ export function WizardScreen() {
   const send = () => {
     if (routeErr) {
       toast(routeErr, { tone: 'danger' })
+      return
+    }
+    if (!route.date || !route.time) {
+      toast('Pilih tanggal dan perkiraan jam terlebih dahulu.', { tone: 'warn' })
+      setDateSheet(true)
       return
     }
     if (secret.length > 0 && secret.length < 10) {
@@ -308,15 +321,17 @@ export function WizardScreen() {
         {step === 2 && (
           <>
             <section className="rounded-[20px] border border-line bg-white p-4">
+              <p className="mb-2 text-xs font-semibold text-muted">Pilih Rute</p>
               <RouteConnector gap="gap-2" from={route.from} to={route.to} fromLabel="St. Keberangkatan" toLabel="St. Tujuan" onFrom={() => setPicker('from')} onTo={() => setPicker('to')} />
               {routeErr && (
                 <p role="alert" className="mt-2 flex items-center gap-1 text-xs font-medium text-danger">
                   <AlertCircle className="size-3.5" aria-hidden /> {routeErr}
                 </p>
               )}
-              <button onClick={() => setDateSheet(true)} className={cx('mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-tint px-4 text-[13px] font-bold text-primary', timeErr && 'ring-2 ring-danger/70')}>
-                <CalendarClock className="size-4" aria-hidden />
-                {route.date} • {route.time} WIB
+              <p className="mb-1.5 mt-3 text-xs font-semibold text-muted">Pilih Tanggal</p>
+              <button onClick={() => setDateSheet(true)} className={cx('inline-flex min-h-11 items-center gap-2 rounded-full bg-tint px-4 text-[13px] font-bold', route.date ? 'text-primary' : 'text-muted', timeErr && 'ring-2 ring-danger/70')}>
+                <CalendarClock className="size-4 text-primary" aria-hidden />
+                {route.date ? `${route.date} • ${route.time} WIB` : 'Pilih tanggal'}
               </button>
               {timeErr && (
                 <p role="alert" className="mt-2 flex items-center gap-1 text-xs font-medium text-danger">
@@ -417,40 +432,17 @@ export function WizardScreen() {
         }}
       />
 
-      <Sheet open={dateSheet} onClose={() => setDateSheet(false)} title="Kapan barang tertinggal?" footer={<Button variant="cta" full size="lg" onClick={() => setDateSheet(false)} disabled={!!timeErr}>Simpan Waktu</Button>}>
-        <p className="mb-2 text-xs font-semibold text-muted">Tanggal</p>
-        <div className="flex flex-wrap gap-2">
-          {DATES.map((d) => (
-            <Pill
-              key={d}
-              active={route.date === d}
-              onClick={() => {
-                touch()
-                setRoute((r) => ({ ...r, date: d }))
-              }}
-            >
-              {d === NOW.date ? 'Hari ini' : d}
-            </Pill>
-          ))}
-        </div>
-        <div className="mt-4">
-          <Field label="Perkiraan Jam (WIB)" error={timeErr}>
-            {(a) => (
-              <input
-                {...a}
-                type="time"
-                value={route.time}
-                onChange={(e) => {
-                  touch()
-                  setRoute((r) => ({ ...r, time: e.target.value }))
-                }}
-                className={inputCls(!!timeErr) + ' h-12'}
-              />
-            )}
-          </Field>
-        </div>
-        <p className="mt-2 text-xs text-muted">Saat ini: 2 Nov 2026, 16:00 WIB</p>
-      </Sheet>
+      <IncidentDateTimeSheet
+        open={dateSheet}
+        date={route.date}
+        time={route.time}
+        onClose={() => setDateSheet(false)}
+        onApply={(d, t) => {
+          touch()
+          setRoute((r) => ({ ...r, date: d, time: t }))
+          setDateSheet(false)
+        }}
+      />
 
       {/* Duplicate detection */}
       <Sheet open={!!dup && Array.isArray(dup.items) && dup.items.length > 0} onClose={() => setDup(null)} title="Sepertinya Anda sudah melapor">
@@ -512,7 +504,7 @@ export function WizardScreen() {
               onClick={() => {
                 const d = initialDraft.current!
                 if (d?.items?.length) setItems(d.items)
-                if (d?.from && d?.to) setRoute({ from: d.from, to: d.to, date: d.date || '2 Nov 2026', time: d.time || '10:15' })
+                if (d?.from && d?.to) setRoute({ from: d.from, to: d.to, date: d.date || nowDateStr(), time: d.time || nowTimeStr() })
                 setPosition(d?.position || '')
                 setSecret(d?.secret || '')
                 setNotify(d?.notify ?? true)
@@ -605,6 +597,164 @@ export function WizardSuccess({ id, count = 1 }: { id: string; count?: number })
         </Button>
       </div>
     </div>
+  )
+}
+
+function IncidentDateTimeSheet({
+  open,
+  date,
+  time,
+  onClose,
+  onApply,
+}: {
+  open: boolean
+  date: string
+  time: string
+  onClose: () => void
+  onApply: (date: string, time: string) => void
+}) {
+  const [draftDate, setDraftDate] = useState(() => date || nowDateStr())
+  const [draftTime, setDraftTime] = useState(() => time || nowTimeStr())
+  const [viewMonth, setViewMonth] = useState(() => {
+    const parsed = parseIndoDate(date || nowDateStr())
+    return new Date(parsed.getFullYear(), parsed.getMonth(), 1)
+  })
+
+  useEffect(() => {
+    if (!open) return
+    const d = date || nowDateStr()
+    const t = time || nowTimeStr()
+    setDraftDate(d)
+    setDraftTime(t)
+    const parsed = parseIndoDate(d)
+    setViewMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+  }, [open, date, time])
+
+  const today = new Date()
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+  const isToday = draftDate === formatIndoDate(todayMid)
+  const liveNowTime = nowTimeStr()
+  const timeErr = isToday && draftTime && toMin(draftTime) > toMin(liveNowTime)
+    ? `Waktu yang dipilih melewati jam saat ini (${liveNowTime} WIB).`
+    : ''
+
+  // Build Monday-first calendar grid for viewMonth
+  const year = viewMonth.getFullYear()
+  const month = viewMonth.getMonth()
+  const firstDayOfMonth = new Date(year, month, 1)
+  const startOffset = (firstDayOfMonth.getDay() + 6) % 7 // Mon=0 .. Sun=6
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const canGoNextMonth = year < todayMid.getFullYear() || (year === todayMid.getFullYear() && month < todayMid.getMonth())
+
+  const cells: Array<{ day: number; dateObj: Date; str: string } | null> = []
+  for (let i = 0; i < startOffset; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month, d)
+    cells.push({ day: d, dateObj, str: formatIndoDate(dateObj) })
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Kapan barang tertinggal?"
+      footer={
+        <div className="flex flex-col gap-2">
+          <p className="text-center text-xs text-muted">
+            Waktu saat ini: <span className="font-semibold text-ink">{formatIndoDate(today)}, {liveNowTime} WIB</span>
+          </p>
+          <Button
+            full
+            size="lg"
+            disabled={!!timeErr}
+            className="bg-ink text-white hover:bg-[#122938]"
+            onClick={() => onApply(draftDate, draftTime)}
+          >
+            Terapkan Tanggal &amp; Jam
+          </Button>
+        </div>
+      }
+    >
+      {/* Interactive Mini Calendar */}
+      <p className="mb-2 text-xs font-semibold text-muted">Pilih Tanggal</p>
+      <div className="rounded-2xl border border-line bg-[#f7fbfd] p-3">
+          <div className="mb-2.5 flex items-center justify-between">
+            <button
+              type="button"
+              aria-label="Bulan sebelumnya"
+              onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+              className="flex size-8 items-center justify-center rounded-xl border border-line bg-white text-ink hover:bg-tint"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+            </button>
+            <p className="text-sm font-bold text-ink">
+              {MONTHS_FULL_ID[month]} {year}
+            </p>
+            <button
+              type="button"
+              aria-label="Bulan berikutnya"
+              disabled={!canGoNextMonth}
+              onClick={() => canGoNextMonth && setViewMonth(new Date(year, month + 1, 1))}
+              className="flex size-8 items-center justify-center rounded-xl border border-line bg-white text-ink hover:bg-tint disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-muted">
+            {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((wd) => (
+              <span key={wd} className="py-1">
+                {wd}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {cells.map((cell, idx) => {
+              if (!cell) return <span key={`empty-${idx}`} />
+              const isFuture = cell.dateObj > todayMid
+              const isSelected = cell.str === draftDate
+              const isCellToday = cell.dateObj.getTime() === todayMid.getTime()
+              return (
+                <button
+                  key={cell.str}
+                  type="button"
+                  disabled={isFuture}
+                  onClick={() => setDraftDate(cell.str)}
+                  className={cx(
+                    'flex h-9 w-full items-center justify-center rounded-xl text-xs transition-colors',
+                    isFuture
+                      ? 'cursor-not-allowed text-muted opacity-35'
+                      : isSelected
+                        ? 'bg-ink font-bold text-white shadow-sm'
+                        : isCellToday
+                          ? 'bg-tint font-bold text-primary ring-1 ring-primary/40 hover:bg-tint/80'
+                          : 'font-semibold text-ink hover:bg-white',
+                  )}
+                >
+                  {cell.day}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+      {/* Time Picker */}
+      <div className="mt-4">
+        <Field label="Perkiraan Jam (WIB)" error={timeErr}>
+          {(a) => (
+            <input
+              {...a}
+              type="time"
+              value={draftTime}
+              onChange={(e) => setDraftTime(e.target.value)}
+              className={inputCls(!!timeErr) + ' h-12'}
+            />
+          )}
+        </Field>
+      </div>
+    </Sheet>
   )
 }
 

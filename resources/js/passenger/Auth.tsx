@@ -115,7 +115,7 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
             >
               <div className="flex items-center gap-3 rounded-2xl bg-mint p-3 text-sm text-[#1f7a4a]">
                 <MailCheck className="size-5 shrink-0" aria-hidden />
-                Kode verifikasi dikirim ke {f.contact}. Gunakan 123456 untuk simulasi.
+                Masukkan 6 digit kode verifikasi yang dikirim ke {f.contact}.
               </div>
               <Field label="Kode OTP (6 angka)" error={errors.otp}>
                 {(a) => <input {...a} autoFocus inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} className={inputCls(!!errors.otp) + ' h-14 text-center text-2xl font-bold tracking-[0.5em]'} />}
@@ -138,13 +138,13 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
               )}
               {reg && (
                 <Field label="Nama Lengkap" error={errors.name}>
-                  {(a) => <input {...a} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Contoh: M. Ramdhan Maulana" className={inputCls(!!errors.name) + ' h-12'} />}
+                  {(a) => <input {...a} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Nama lengkap sesuai KTP" className={inputCls(!!errors.name) + ' h-12'} />}
                 </Field>
               )}
               <Field label="Email / Nomor WhatsApp" error={errors.contact}>
-                {(a) => <input {...a} autoComplete="username" value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} placeholder="nama@mail.com atau 0812xxxx" className={inputCls(!!errors.contact) + ' h-12'} />}
+                {(a) => <input {...a} autoComplete="username" value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} placeholder="nama@email.com atau 0812xxxx" className={inputCls(!!errors.contact) + ' h-12'} />}
               </Field>
-              <Field label="Kata Sandi" error={errors.pw} helper={reg ? 'Minimal 8 karakter, kombinasi huruf dan angka.' : 'Simulasi: ketik "salah" untuk mencoba kata sandi keliru.'}>
+              <Field label="Kata Sandi" error={errors.pw} helper={reg ? 'Minimal 8 karakter, kombinasi huruf dan angka.' : undefined}>
                 {(a) => (
                   <div className="relative">
                     <input {...a} type={show ? 'text' : 'password'} autoComplete={reg ? 'new-password' : 'current-password'} value={f.pw} onChange={(e) => setF({ ...f, pw: e.target.value })} placeholder="••••••••" className={inputCls(!!errors.pw) + ' h-12 pr-12'} />

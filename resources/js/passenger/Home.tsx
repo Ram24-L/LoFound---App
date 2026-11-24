@@ -7,7 +7,7 @@ import { useApp } from './ctx'
 import { SectionTitle } from './shell'
 
 export function HomeScreen() {
-  const { user, go, reports, unread, requireAuth, draft, setDraft } = useApp()
+  const { user, go, tab, reports, unread, requireAuth, draft, setDraft } = useApp()
   const { categories } = useCategories()
   const CATS = ['Semua Kategori', ...categories]
   const [cat, setCat] = useState('Semua Kategori')
@@ -56,8 +56,10 @@ export function HomeScreen() {
                   <Bell className="size-5" aria-hidden />
                   {unread > 0 && <span className="absolute right-2.5 top-2.5 size-2.5 rounded-full border-2 border-primary bg-coral" />}
                 </button>
-                <button aria-label="Buka profil" onClick={() => go('profile')} className="flex size-11 items-center justify-center rounded-full">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-white text-sm font-bold text-primary">MR</span>
+                <button aria-label="Buka profil" onClick={() => tab('profile')} className="flex size-11 items-center justify-center rounded-full">
+                  <span className="flex size-9 items-center justify-center rounded-full bg-white text-sm font-bold text-primary">
+                    {(user.full || user.name || 'P').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}
+                  </span>
                 </button>
               </div>
             ) : (
@@ -126,7 +128,7 @@ export function HomeScreen() {
               )}
             </div>
           ) : (
-            <button onClick={() => (user ? startReport() : requireAuth('Masuk untuk melacak laporan Anda dan mendapat kabar saat barang ditemukan.', () => go('reports'), 'Berhasil masuk.'))} className="flex items-center gap-3 rounded-[20px] border-2 border-dashed border-accent bg-white/70 p-4 text-left">
+            <button onClick={() => (user ? startReport() : requireAuth('Masuk untuk melacak laporan Anda dan mendapat kabar saat barang ditemukan.', () => tab('reports'), 'Berhasil masuk.'))} className="flex items-center gap-3 rounded-[20px] border-2 border-dashed border-accent bg-white/70 p-4 text-left">
               <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-tint text-primary">
                 <Search className="size-5" aria-hidden />
               </span>
@@ -167,6 +169,7 @@ export function HomeScreen() {
 
           {/* Feed */}
           <section aria-label="Daftar barang yang sudah kembali" className="flex flex-col gap-2.5">
+            <h3 className="px-1 pt-1 text-[13px] font-bold text-ink">Riwayat barang yang baru saja kembali ke pemiliknya</h3>
             {effective === 'loading' &&
               [0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-3 rounded-[20px] border border-line bg-white p-4">
@@ -274,19 +277,20 @@ export function HomeScreen() {
 }
 
 function BentoMetrics({ onHow }: { onHow: () => void }) {
-  const [stats, setStats] = useState({ total: 396, returned: 342, ratio: 86.4, in_progress: 54 })
+  const [stats, setStats] = useState<{ total: number; returned: number; ratio: number; in_progress: number } | null>(null)
 
   useEffect(() => {
     homeApi.stats()
       .then((data) => {
         if (data && data.total !== undefined) setStats(data)
+        else setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 })
       })
-      .catch(() => {})
+      .catch(() => setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 }))
   }, [])
 
-  const ratio = useCountUp(stats.ratio, 800, 1)
-  const created = useCountUp(stats.total, 800)
-  const returned = useCountUp(stats.returned, 800)
+  const ratio = useCountUp(stats?.ratio ?? 0, 800, 1)
+  const created = useCountUp(stats?.total ?? 0, 800)
+  const returned = useCountUp(stats?.returned ?? 0, 800)
   return (
     <button onClick={onHow} aria-label="Transparansi layanan November 2026. Ketuk untuk melihat cara kami menghitung." className="rounded-[20px] border border-line bg-white p-4 text-left shadow-[0_12px_32px_-18px_rgba(24,54,74,0.45)]">
       <div className="mb-3.5 flex items-center gap-2.5">
@@ -302,32 +306,50 @@ function BentoMetrics({ onHow }: { onHow: () => void }) {
           LIVE
         </span>
       </div>
-      <div className="rounded-2xl bg-mint p-3.5">
-        <div className="flex items-center gap-3.5">
-          <ProgressRing value={stats.ratio} size={72} stroke={7}>
-            <span className="text-[15px] font-bold tabular-nums text-ink">{ratio}%</span>
-          </ProgressRing>
-          <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold text-[#1f7a4a]">Rasio Kembali</p>
-            <p className="text-[20px] font-bold tabular-nums leading-7 text-ink">
-              {returned} <span className="text-[14px] font-semibold text-muted">dari {created} laporan</span>
-            </p>
-            <p className="text-[12px] text-muted">sudah kembali ke pemiliknya</p>
+      {stats === null ? (
+        <div className="rounded-2xl bg-mint p-3.5" aria-busy="true" aria-label="Memuat statistik layanan">
+          <div className="flex items-center gap-3.5">
+            <Skeleton className="size-[72px] shrink-0 rounded-full bg-white/80" />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <Skeleton className="h-3 w-24 bg-white/80" />
+              <Skeleton className="h-6 w-40 bg-white/80" />
+              <Skeleton className="h-3 w-32 bg-white/80" />
+            </div>
+          </div>
+          <Skeleton className="mt-3 h-2 w-full rounded-full bg-white/80" />
+          <div className="mt-2 flex justify-between">
+            <Skeleton className="h-3 w-24 bg-white/80" />
+            <Skeleton className="h-3 w-24 bg-white/80" />
           </div>
         </div>
-        <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden>
-          <span className="h-full rounded-l-full bg-success" style={{ width: `${Math.min(100, Math.max(0, stats.ratio))}%` }} />
-          <span className="h-full flex-1 rounded-r-full bg-white" />
+      ) : (
+        <div className="rounded-2xl bg-mint p-3.5">
+          <div className="flex items-center gap-3.5">
+            <ProgressRing value={stats.ratio} size={72} stroke={7}>
+              <span className="text-[15px] font-bold tabular-nums text-ink">{ratio}%</span>
+            </ProgressRing>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-[#1f7a4a]">Rasio Kembali</p>
+              <p className="text-[20px] font-bold tabular-nums leading-7 text-ink">
+                {returned} <span className="text-[14px] font-semibold text-muted">dari {created} laporan</span>
+              </p>
+              <p className="text-[12px] text-muted">sudah kembali ke pemiliknya</p>
+            </div>
+          </div>
+          <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden>
+            <span className="h-full rounded-l-full bg-success transition-all duration-700" style={{ width: `${Math.min(100, Math.max(0, stats.ratio))}%` }} />
+            <span className="h-full flex-1 rounded-r-full bg-white" />
+          </div>
+          <div className="mt-2 flex justify-between text-[11px] font-semibold">
+            <span className="flex items-center gap-1.5 text-[#1f7a4a]">
+              <span className="size-2 rounded-full bg-success" /> Sudah kembali
+            </span>
+            <span className="flex items-center gap-1.5 text-muted">
+              <span className="size-2 rounded-full border border-[#b9d6c6] bg-white" /> Dalam proses • {stats.in_progress}
+            </span>
+          </div>
         </div>
-        <div className="mt-2 flex justify-between text-[11px] font-semibold">
-          <span className="flex items-center gap-1.5 text-[#1f7a4a]">
-            <span className="size-2 rounded-full bg-success" /> Sudah kembali
-          </span>
-          <span className="flex items-center gap-1.5 text-muted">
-            <span className="size-2 rounded-full border border-[#b9d6c6] bg-white" /> Dalam proses • {stats.in_progress}
-          </span>
-        </div>
-      </div>
+      )}
     </button>
   )
 }

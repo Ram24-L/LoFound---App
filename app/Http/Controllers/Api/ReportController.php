@@ -65,8 +65,8 @@ class ReportController
                 'stasiun_ke_id'    => $stasiunKe->id,
                 'tanggal_kejadian' => $tanggal,
                 'waktu_kejadian'   => $request->input('time'),
-                'posisi_terakhir'  => $request->input('position', 'Tidak diketahui'),
-                'ciri_rahasia'     => $request->input('secret', ''),
+                'posisi_terakhir'  => $request->input('position') ?: 'Tidak diketahui',
+                'ciri_rahasia'     => $request->input('secret') ?? '',
                 'foto_referensi'   => $request->input('photo_url') ?? $request->input('foto_referensi'),
                 'status'           => 'diterima',
                 'notify'           => $request->boolean('notify', true),
@@ -79,7 +79,7 @@ class ReportController
                     'sub_kode'    => chr(65 + $i), // A, B, C...
                     'kategori_id' => $kategori?->id ?? 1,
                     'nama_barang' => $item['name'],
-                    'warna'       => $item['color'] ?? 'Hitam',
+                    'warna'       => ! empty($item['color']) ? $item['color'] : 'Hitam',
                 ]);
             }
 
@@ -159,8 +159,8 @@ class ReportController
             'name'     => 'sometimes|string|min:5|max:80',
             'color'    => 'sometimes|string',
             'category' => 'sometimes|string',
-            'position' => 'sometimes|string',
-            'secret'   => 'sometimes|string|max:500',
+            'position' => 'nullable|string',
+            'secret'   => 'nullable|string|max:500',
         ]);
 
         $changes = [];
@@ -174,7 +174,7 @@ class ReportController
                     $changes[] = 'nama';
                 }
                 if ($request->has('color') && $item->warna !== $request->input('color')) {
-                    $item->update(['warna' => $request->input('color')]);
+                    $item->update(['warna' => $request->input('color') ?: 'Hitam']);
                     $changes[] = 'warna';
                 }
                 if ($request->has('category')) {
@@ -186,13 +186,19 @@ class ReportController
                 }
             }
 
-            if ($request->has('position') && $laporan->posisi_terakhir !== $request->input('position')) {
-                $laporan->update(['posisi_terakhir' => $request->input('position')]);
-                $changes[] = 'posisi';
+            if ($request->has('position')) {
+                $newPos = $request->input('position') ?: 'Tidak diketahui';
+                if ($laporan->posisi_terakhir !== $newPos) {
+                    $laporan->update(['posisi_terakhir' => $newPos]);
+                    $changes[] = 'posisi';
+                }
             }
-            if ($request->has('secret') && $laporan->ciri_rahasia !== $request->input('secret')) {
-                $laporan->update(['ciri_rahasia' => $request->input('secret')]);
-                $changes[] = 'ciri rahasia';
+            if ($request->has('secret')) {
+                $newSecret = $request->input('secret') ?? '';
+                if ($laporan->ciri_rahasia !== $newSecret) {
+                    $laporan->update(['ciri_rahasia' => $newSecret]);
+                    $changes[] = 'ciri rahasia';
+                }
             }
 
             if (count($changes) > 0) {

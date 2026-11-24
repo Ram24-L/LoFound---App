@@ -73,16 +73,41 @@ async function request<T = unknown>(
   return res.json()
 }
 
+function sanitizeErrorMessage(raw: unknown, status: number): string {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return status >= 500
+      ? 'Terjadi gangguan pada server. Silakan coba beberapa saat lagi.'
+      : 'Terjadi kesalahan. Silakan coba lagi.'
+  }
+
+  const looksTechnical =
+    /SQLSTATE|PDOException|QueryException|Connection:\s*pgsql|insert\s+into|update\s+.*set|delete\s+from|select\s+.*from|stack trace|vendor\/laravel/i.test(raw) ||
+    raw.length > 200
+
+  if (looksTechnical) {
+    return status >= 500
+      ? 'Terjadi gangguan pada sistem saat memproses data. Silakan coba lagi.'
+      : 'Permintaan tidak dapat diproses. Periksa kembali data Anda.'
+  }
+
+  return raw
+}
+
 async function parseError(res: Response): Promise<ApiError> {
   try {
     const json = await res.json()
     return {
       status: res.status,
-      message: json.message || json.error || 'Terjadi kesalahan.',
+      message: sanitizeErrorMessage(json.message || json.error, res.status),
       errors: json.errors,
     }
   } catch {
-    return { status: res.status, message: 'Terjadi kesalahan jaringan.' }
+    return {
+      status: res.status,
+      message: res.status >= 500
+        ? 'Terjadi gangguan pada server. Silakan coba beberapa saat lagi.'
+        : 'Terjadi kesalahan jaringan.',
+    }
   }
 }
 

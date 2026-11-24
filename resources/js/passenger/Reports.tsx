@@ -287,11 +287,7 @@ export function DetailScreen({ id }: { id: string }) {
         />
       }
       footer={
-        ACTIVE(r) ? (
-          <Button variant="cta" size="lg" full onClick={() => go('tracking', { id })}>
-            Lacak Status Laporan
-          </Button>
-        ) : r.status === 'dibatalkan' ? (
+        r.status === 'dibatalkan' ? (
           <Button
             variant="outline"
             size="lg"

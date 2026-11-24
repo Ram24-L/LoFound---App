@@ -262,7 +262,7 @@ class StaffAdminController extends Controller
             'kode'        => strtoupper(trim($request->code)),
             'nama'        => trim($request->name),
             'lin'         => trim($request->line),
-            'jam_layanan' => $request->input('hours', '04:00–24:00'),
+            'jam_layanan' => $request->input('hours') ?: '04:00–24:00',
             'active'      => $request->boolean('active', true),
         ]);
 

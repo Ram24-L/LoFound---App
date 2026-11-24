@@ -1290,7 +1290,7 @@ export function HandoverPage() {
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
                     <div>
                       <dt className="text-xs text-muted">Pemilik</dt>
-                      <dd className="font-bold">{bastData?.owner ?? 'M. Ramdhan Maulana'}</dd>
+                      <dd className="font-bold">{bastData?.owner ?? 'Penumpang KRL'}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted">Barang</dt>
