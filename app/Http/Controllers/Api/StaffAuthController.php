@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\ResolveTabToken;
 use App\Models\AuditLog;
-use App\Models\Stasiun;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,52 +25,16 @@ class StaffAuthController extends Controller
         $email = strtolower(trim($request->email));
         $user = User::where('email', $email)->first();
 
-        // Support intuitive role-based emails such as petugascs@..., petugaslogistik@..., admin@..., kepalastasiun@...
-        if (! $user) {
-            $prefix = explode('@', $email)[0];
-            $autoRole = null;
-            $autoName = null;
-
-            if (str_contains($prefix, 'debug') || str_contains($prefix, 'super') || str_contains($prefix, 'tester')) {
-                $autoRole = 'debug';
-                $autoName = 'Super Debug (All Access)';
-            } elseif (str_contains($prefix, 'cs') || str_contains($prefix, 'petugascs')) {
-                $autoRole = 'cs';
-                $autoName = 'Rina Kurniasih (Petugas CS)';
-            } elseif (str_contains($prefix, 'logistik') || str_contains($prefix, 'logistic')) {
-                $autoRole = 'logistik';
-                $autoName = 'Agus Pratama (Logistik)';
-            } elseif (str_contains($prefix, 'admin')) {
-                $autoRole = 'admin';
-                $autoName = 'Hendra Wijaya (Admin)';
-            } elseif (str_contains($prefix, 'kepala') || str_contains($prefix, 'manager') || str_contains($prefix, 'stasiun')) {
-                $autoRole = 'kepala_stasiun';
-                $autoName = 'Ir. Sutrisno (Kepala Stasiun)';
-            }
-
-            if ($autoRole) {
-                $stasiun = Stasiun::where('nama', 'Jakarta Kota')->first() ?? Stasiun::first();
-                $user = User::create([
-                    'name'       => $autoName,
-                    'email'      => $email,
-                    'password'   => Hash::make('lofound2026'),
-                    'role'       => $autoRole,
-                    'stasiun_id' => $stasiun?->id,
-                ]);
-            }
-        }
-
-        $validPassword = $user && (
-            Hash::check($request->password, $user->password) ||
-            in_array($request->password, ['lofound2026', 'password'])
-        );
-
-        if (! $validPassword) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Email atau kata sandi salah.'], 422);
         }
 
         if ($user->role === 'penumpang') {
             return response()->json(['message' => 'Akun ini bukan akun petugas.'], 403);
+        }
+
+        if ($user->active === false) {
+            return response()->json(['message' => 'Akun petugas ini telah dinonaktifkan.'], 403);
         }
 
         // Only set cookie session if no user is currently logged into the cookie session,

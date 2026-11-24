@@ -273,8 +273,8 @@ export function StaffApp() {
 }
 
 function StaffLogin({ onLogin }: { onLogin: (u: StaffUser) => void }) {
-  const [email, setEmail] = useState('debug@kci.id')
-  const [pw, setPw] = useState('lofound2026')
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -282,6 +282,7 @@ function StaffLogin({ onLogin }: { onLogin: (u: StaffUser) => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email.includes('@')) return setErr('Masukkan alamat email dinas yang valid.')
+    if (!pw) return setErr('Masukkan kata sandi Anda.')
     setErr('')
     setBusy(true)
     try {
@@ -312,13 +313,13 @@ function StaffLogin({ onLogin }: { onLogin: (u: StaffUser) => void }) {
             <p className="text-sm text-muted">Hak akses (RBAC) otomatis disesuaikan berdasarkan akun email dinas Anda.</p>
           </div>
           {err && <Banner tone="danger">{err}</Banner>}
-          <Field label="Email Dinas" helper="Role: debug@kci.id (All Access) • petugascs@kci.id • petugaslogistik@kci.id • admin@kci.id • kepalastasiun@kci.id">
-            {(a) => <input {...a} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="debug@kci.id" className={inputCls() + ' h-12'} />}
+          <Field label="Email Dinas">
+            {(a) => <input {...a} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nama@kci.id" className={inputCls() + ' h-12'} />}
           </Field>
-          <Field label="Kata Sandi" helper="Default sandi dinas: lofound2026">
+          <Field label="Kata Sandi">
             {(a) => (
               <div className="relative">
-                <input {...a} type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} className={inputCls() + ' h-12 pr-12'} />
+                <input {...a} type={show ? 'text' : 'password'} autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" className={inputCls() + ' h-12 pr-12'} />
                 <IconButton
                   type="button"
                   icon={show ? EyeOff : Eye}
