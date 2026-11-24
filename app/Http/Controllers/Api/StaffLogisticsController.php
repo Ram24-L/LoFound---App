@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\BarangTemuan;
 use App\Models\BastPengambilan;
 use App\Models\RiwayatLaporan;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -151,6 +152,12 @@ class StaffLogisticsController extends Controller
                     'waktu'      => now()->format('H:i'),
                     'keterangan' => "Paket ekspedisi ({$awb}) tiba di tujuan dan diterima penumpang. Selesai.",
                 ]);
+                NotificationService::notifyReport(
+                    $laporan,
+                    'Paket Telah Tiba',
+                    "Paket ekspedisi ({$awb}) telah tiba di tujuan. Status laporan Anda kini Selesai.",
+                    ['details' => ['Kurir' => $bast->kurir ?: '-', 'Nomor Resi' => $awb]]
+                );
             } elseif ($action === 'ship') {
                 $laporan->update(['status' => 'dikirim']);
                 RiwayatLaporan::create([
@@ -158,6 +165,12 @@ class StaffLogisticsController extends Controller
                     'waktu'      => now()->format('H:i'),
                     'keterangan' => "Diserahkan ke kurir {$bast->kurir}. Resi: {$awb}.",
                 ]);
+                NotificationService::notifyReport(
+                    $laporan,
+                    'Paket Diserahkan ke Kurir',
+                    "Paket Anda telah diserahkan ke {$bast->kurir} dengan nomor resi {$awb}.",
+                    ['details' => ['Kurir' => $bast->kurir ?: '-', 'Nomor Resi' => $awb]]
+                );
             } else {
                 RiwayatLaporan::create([
                     'laporan_id' => $laporan->id,

@@ -3,11 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Middleware\ResolveTabToken;
+use App\Models\AuditLog;
+use App\Models\BarangTemuan;
+use App\Models\KlaimVerifikasi;
 use App\Models\User;
+use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController
@@ -30,6 +37,12 @@ class AuthController
             ]);
         }
 
+        if ($user->active === false) {
+            throw ValidationException::withMessages([
+                'contact' => ['Akun ini telah dinonaktifkan.'],
+            ]);
+        }
+
         Auth::login($user, $request->boolean('remember', true));
 
         return response()->json([
@@ -38,16 +51,23 @@ class AuthController
         ]);
     }
 
-    public function register(Request $request): JsonResponse
+    public function register(Request $request, OtpService $otpService): JsonResponse
     {
         $request->validate([
             'name'     => 'required|string|max:100',
             'contact'  => 'required|string',
             'password' => 'required|string|min:8',
+            'otp'      => 'nullable|string|size:6',
         ]);
 
         $contact = $request->input('contact');
-        $isEmail = filter_var($contact, FILTER_VALIDATE_EMAIL);
+        $isEmail = (bool) filter_var($contact, FILTER_VALIDATE_EMAIL);
+
+        if ($request->filled('otp') && ! $otpService->verify($contact, (string) $request->input('otp'))) {
+            throw ValidationException::withMessages([
+                'otp' => ['Kode OTP tidak valid atau sudah kedaluwarsa.'],
+            ]);
+        }
 
         // Check uniqueness
         $field = $isEmail ? 'email' : 'phone';
@@ -57,9 +77,10 @@ class AuthController
             ]);
         }
 
+        $cleanPhone = preg_replace('/\D+/', '', $contact) ?: Str::random(8);
         $user = User::create([
             'name'     => $request->input('name'),
-            'email'    => $isEmail ? $contact : null,
+            'email'    => $isEmail ? $contact : "{$cleanPhone}@wa.lofound.local",
             'phone'    => $isEmail ? null : $contact,
             'password' => $request->input('password'),
             'role'     => 'penumpang',
@@ -98,21 +119,67 @@ class AuthController
         ]);
     }
 
-    public function otpLogin(Request $request): JsonResponse
+    public function sendOtp(Request $request, OtpService $otpService): JsonResponse
     {
         $request->validate([
-            'phone' => 'required|string',
-            'otp'   => 'required|string|size:6',
+            'contact' => 'nullable|string',
+            'phone'   => 'nullable|string',
+            'purpose' => 'nullable|string|in:login,register',
         ]);
 
-        $phone = $request->input('phone');
-        $user = User::where('phone', $phone)->first();
+        $contact = trim((string) ($request->input('contact') ?: $request->input('phone')));
+        if (! $contact) {
+            throw ValidationException::withMessages([
+                'contact' => ['Nomor WhatsApp atau email wajib diisi.'],
+            ]);
+        }
+
+        if ($request->input('purpose') === 'register') {
+            $isEmail = (bool) filter_var($contact, FILTER_VALIDATE_EMAIL);
+            if (User::where($isEmail ? 'email' : 'phone', $contact)->exists()) {
+                throw ValidationException::withMessages([
+                    'contact' => ['Akun dengan ' . ($isEmail ? 'email' : 'nomor') . ' ini sudah terdaftar. Silakan masuk.'],
+                ]);
+            }
+        }
+
+        return response()->json($otpService->send($contact));
+    }
+
+    public function otpLogin(Request $request, OtpService $otpService): JsonResponse
+    {
+        $request->validate([
+            'contact' => 'nullable|string',
+            'phone'   => 'nullable|string',
+            'otp'     => 'required|string|size:6',
+        ]);
+
+        $contact = trim((string) ($request->input('contact') ?: $request->input('phone')));
+        if (! $contact) {
+            throw ValidationException::withMessages([
+                'contact' => ['Email atau nomor WhatsApp wajib diisi.'],
+            ]);
+        }
+
+        $otp = (string) $request->input('otp');
+
+        if (! $otpService->verify($contact, $otp)) {
+            throw ValidationException::withMessages([
+                'otp' => ['Kode OTP tidak valid atau sudah kedaluwarsa.'],
+            ]);
+        }
+
+        $isEmail = (bool) filter_var($contact, FILTER_VALIDATE_EMAIL);
+        $field = $isEmail ? 'email' : 'phone';
+        $user = User::where($field, $contact)->first();
 
         if (! $user) {
+            $cleanPhone = preg_replace('/\D+/', '', $contact) ?: Str::random(8);
             $user = User::create([
-                'name'     => 'Penumpang ' . substr($phone, -4),
-                'phone'    => $phone,
-                'password' => Hash::make('password123'),
+                'name'     => $isEmail ? ucfirst(explode('@', $contact)[0]) : ('Penumpang ' . substr($cleanPhone, -4)),
+                'email'    => $isEmail ? $contact : "{$cleanPhone}@wa.lofound.local",
+                'phone'    => $isEmail ? null : $contact,
+                'password' => Hash::make(Str::random(24)),
                 'role'     => 'penumpang',
             ]);
         }
@@ -194,6 +261,62 @@ class AuthController
             ->findOrFail($id);
 
         $bast->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Permanently delete the authenticated passenger account and its personal data.
+     * DELETE /api/auth/account
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user || ! $user->isPenumpang()) {
+            return response()->json([
+                'message' => 'Penghapusan akun mandiri hanya tersedia untuk akun penumpang.',
+            ], 403);
+        }
+
+        $ktpPaths = [];
+
+        DB::transaction(function () use ($user, &$ktpPaths) {
+            $claims = KlaimVerifikasi::whereHas('laporan', fn ($q) => $q->where('user_id', $user->id))->get();
+
+            $temuanIds = $claims->pluck('barang_temuan_id')->filter()->unique()->values();
+            if ($temuanIds->isNotEmpty()) {
+                BarangTemuan::whereIn('id', $temuanIds)
+                    ->where('status_simpan', 'Dalam Klaim')
+                    ->update(['status_simpan' => 'Tersimpan']);
+            }
+
+            foreach ($claims as $claim) {
+                if ($claim->bukti_tambahan && str_contains($claim->bukti_tambahan, '/ktp/')) {
+                    $ktpPaths[] = 'ktp/' . basename($claim->bukti_tambahan);
+                }
+            }
+
+            AuditLog::record(
+                null,
+                $user->name,
+                'Hapus akun penumpang permanen',
+                $user->email ?: ($user->phone ?: 'USER-' . $user->id),
+                'Berhasil'
+            );
+
+            $user->delete();
+        });
+
+        foreach (array_unique($ktpPaths) as $path) {
+            Storage::disk('local')->delete($path);
+        }
+
+        if (! $request->hasHeader('X-Tab-Token')) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['ok' => true]);
     }

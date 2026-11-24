@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'url' => env('WHATSAPP_API_URL', 'https://api.fonnte.com/send'),
+        'token' => env('WHATSAPP_API_TOKEN'),
+    ],
+
+    'midtrans' => [
+        'server_key' => env('MIDTRANS_SERVER_KEY'),
+        'client_key' => env('MIDTRANS_CLIENT_KEY'),
+        'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
+    ],
+
+    'shipping' => [
+        'api_url' => env('SHIPPING_API_URL'),
+        'api_key' => env('SHIPPING_API_KEY'),
+        'webhook_secret' => env('SHIPPING_WEBHOOK_SECRET'),
+    ],
+
 ];

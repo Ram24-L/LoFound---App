@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\StaffCsController;
 use App\Http\Controllers\Api\StaffLogisticsController;
 use App\Http\Controllers\Api\StaffManagerController;
 use App\Http\Controllers\Api\UploadController;
+use App\Http\Controllers\Api\WebhookController;
 use App\Models\KategoriBarang;
 use App\Models\Stasiun;
 use Illuminate\Http\Request;
@@ -30,13 +31,21 @@ Route::post('/upload', [UploadController::class, 'upload']);
 // Auth
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
 Route::post('/auth/otp', [AuthController::class, 'otpLogin']);
 Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth');
 Route::get('/auth/user', [AuthController::class, 'user']);
 
-// Protected passenger routes
+// Production Webhooks (Signature / Secret Verified)
+Route::post('/webhooks/payment', [WebhookController::class, 'payment']);
+Route::post('/webhooks/shipping', [WebhookController::class, 'shipping']);
+
+// Protected passenger & authenticated routes
 Route::middleware('auth')->group(function () {
+    Route::get('/private-files/ktp/{filename}', [UploadController::class, 'showKtp']);
+    Route::get('/notifications', [ReportController::class, 'notifications']);
     Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::delete('/auth/account', [AuthController::class, 'deleteAccount']);
     Route::get('/transactions', [AuthController::class, 'transactions']);
     Route::delete('/transactions/{id}', [AuthController::class, 'deleteTransaction']);
     Route::get('/reports', [ReportController::class, 'index']);

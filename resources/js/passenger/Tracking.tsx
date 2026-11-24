@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, BellRing, Check, ChevronDown, Clock, FileCheck2, Hourglass, Info, Lock, MessageSquareWarning, RefreshCw, Search, ShieldCheck, Ticket, Upload, X, XCircle } from 'lucide-react'
 import { CANDIDATES as STATIC_CANDIDATES, type ReportStatus } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, Dialog, ErrorState, Field, inputCls, RadioDot, Skeleton, Toggle, useToast } from '../lib/ui'
+import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, Dialog, EmptyState, ErrorState, Field, inputCls, RadioDot, Skeleton, Toggle, useToast } from '../lib/ui'
 import { reportApi, uploadApi } from '../lib/api'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
@@ -180,12 +180,9 @@ export function TrackingScreen({ id }: { id: string }) {
           <div className="flex items-start gap-2.5 rounded-2xl bg-tint p-3 text-[13px] leading-5 text-ink">
             <Search className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
             <span>
-              Laporan Anda sudah masuk ke antrean petugas CS. Petugas sedang mencocokkan dengan barang temuan di gudang.
+              Laporan Anda sedang dicocokkan secara internal oleh Petugas CS berdasarkan ciri rahasia Anda. Tombol klaim otomatis terbuka setelah CS menautkan kandidat yang cocok.
             </span>
           </div>
-          <Button variant="cta" full onClick={() => go('candidates', { id })}>
-            Lihat Kandidat & Ajukan Klaim <ArrowRight className="size-4" aria-hidden />
-          </Button>
           <button onClick={refresh} className="min-h-10 rounded-xl border border-dashed border-[#b9c7d0] text-[11px] font-semibold text-muted hover:bg-tint">
             Periksa Status Terbaru
           </button>
@@ -340,10 +337,9 @@ export function CandidatesScreen({ id }: { id: string }) {
     setLoading(true)
     reportApi.candidates(id)
       .then((data) => {
-        if (data && data.length > 0) setCandsList(data)
-        else setCandsList(STATIC_CANDIDATES)
+        setCandsList(Array.isArray(data) ? data : [])
       })
-      .catch(() => setCandsList(STATIC_CANDIDATES))
+      .catch(() => setCandsList([]))
       .finally(() => setLoading(false))
   }, [id])
 
@@ -389,34 +385,44 @@ export function CandidatesScreen({ id }: { id: string }) {
           />
         </div>
         <div role={multi ? 'group' : 'radiogroup'} aria-label="Daftar kandidat" className="flex flex-col gap-2.5">
-          {candsList.map((c) => {
-            const on = sel.includes(c.id)
-            const mm = matchMeta[c.match as keyof typeof matchMeta] || matchMeta.Sedang
-            return (
-              <button key={c.id} role={multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => choose(c.id)} className={cx('flex items-start gap-3 rounded-[20px] bg-white p-4 text-left', on ? 'border-2 border-primary' : 'border border-line')}>
-                {multi ? (
-                  <span className={cx('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border-2', on ? 'border-primary bg-primary text-white' : 'border-[#b9c7d0]')}>{on && <Check className="size-4" strokeWidth={3} aria-hidden />}</span>
-                ) : (
-                  <span className="mt-0.5">
-                    <RadioDot checked={on} />
-                  </span>
-                )}
-                <CategoryBadge category={c.cat} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink">{c.desc}</p>
-                  <p className="text-xs text-muted">{c.found}</p>
-                  <p className="text-xs text-muted">{c.posko}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[#e6edf1]" aria-hidden>
-                      <span className={cx('block h-full rounded-full', mm.w, mm.c)} />
+          {!loading && candsList.length === 0 ? (
+            <div className="rounded-[20px] border border-line bg-white">
+              <EmptyState
+                icon={Lock}
+                title="Belum ada kandidat barang yang ditautkan petugas CS."
+                body="Demi keamanan, daftar barang gudang hanya muncul setelah Petugas CS mencocokkan laporan Anda."
+              />
+            </div>
+          ) : (
+            candsList.map((c) => {
+              const on = sel.includes(c.id)
+              const mm = matchMeta[c.match as keyof typeof matchMeta] || matchMeta.Sedang
+              return (
+                <button key={c.id} role={multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => choose(c.id)} className={cx('flex items-start gap-3 rounded-[20px] bg-white p-4 text-left', on ? 'border-2 border-primary' : 'border border-line')}>
+                  {multi ? (
+                    <span className={cx('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border-2', on ? 'border-primary bg-primary text-white' : 'border-[#b9c7d0]')}>{on && <Check className="size-4" strokeWidth={3} aria-hidden />}</span>
+                  ) : (
+                    <span className="mt-0.5">
+                      <RadioDot checked={on} />
                     </span>
-                    <Badge tone={mm.tone}>Kecocokan {c.match}</Badge>
-                    {skipped.includes(c.id) && <Badge tone="neutral">Dilewati</Badge>}
+                  )}
+                  <CategoryBadge category={c.cat} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-ink">{c.desc}</p>
+                    <p className="text-xs text-muted">{c.found}</p>
+                    <p className="text-xs text-muted">{c.posko}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[#e6edf1]" aria-hidden>
+                        <span className={cx('block h-full rounded-full', mm.w, mm.c)} />
+                      </span>
+                      <Badge tone={mm.tone}>Kecocokan {c.match}</Badge>
+                      {skipped.includes(c.id) && <Badge tone="neutral">Dilewati</Badge>}
+                    </div>
                   </div>
-                </div>
-              </button>
-            )
-          })}
+                </button>
+              )
+            })
+          )}
         </div>
         <p className="text-center text-xs text-muted">Kandidat yang tidak dipilih tetap ditahan 24 jam dengan label "Dilewati".</p>
       </div>
@@ -503,7 +509,7 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
     if (!f) return
     setKtp('uploading')
     try {
-      const res = await uploadApi.upload(f)
+      const res = await uploadApi.upload(f, 'ktp')
       setKtpMeta({
         name: f.name,
         size: (f.size / 1024 / 1024).toFixed(1) + ' MB',

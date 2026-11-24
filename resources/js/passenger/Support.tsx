@@ -2,15 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, BellOff, ChevronDown, ChevronRight, CircleHelp, Compass, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Pencil, Plus, Search, ServerCrash, ShieldAlert, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
 import { NOTIFS } from '../lib/data'
 import { Badge, Button, cx, Dialog, EmptyState, Field, inputCls, rupiah, Toggle, useToast } from '../lib/ui'
-import { authApi, type SavedAddress } from '../lib/api'
+import { authApi, reportApi, type SavedAddress } from '../lib/api'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
 export function NotificationsScreen() {
-  const { setUnread, go } = useApp()
+  const { setUnread, go, user } = useApp()
   const toast = useToast()
-  const [items, setItems] = useState(NOTIFS)
+  const [items, setItems] = useState<Array<{ id: number; report_id?: string; title: string; body: string; t: string; unread: boolean }>>([])
   const [tab, setTab] = useState<'all' | 'unread'>('all')
+
+  useEffect(() => {
+    if (!user) {
+      setItems(NOTIFS)
+      return
+    }
+    reportApi.notifications()
+      .then((data) => {
+        setItems(data)
+        setUnread(data.filter((n) => n.unread).length)
+      })
+      .catch(() => setItems([]))
+  }, [user, setUnread])
+
   const list = tab === 'all' ? items : items.filter((n) => n.unread)
   const sync = (next: typeof items) => {
     setItems(next)
@@ -56,7 +70,7 @@ export function NotificationsScreen() {
             <button
               onClick={() => {
                 sync(items.map((x) => (x.id === n.id ? { ...x, unread: false } : x)))
-                if (n.body.includes('042')) go('tracking', { id: 'LPR-2026-042' })
+                if (n.report_id) go('tracking', { id: n.report_id })
               }}
               className={cx('flex w-full items-start gap-3 rounded-[20px] border p-4 text-left', n.unread ? 'border-primary/40 bg-white' : 'border-line bg-white/70')}
             >
@@ -118,6 +132,7 @@ export function ProfileScreen() {
   const [section, setSection] = useState<string | null>(null)
   const [del, setDel] = useState<0 | 1 | 2>(0)
   const [confirmText, setConfirmText] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   // Profile Data Diri & Password state
   const [editNik, setEditNik] = useState(user?.nik || '')
@@ -447,14 +462,32 @@ export function ProfileScreen() {
       </Dialog>
       <Dialog
         open={del === 2}
-        onClose={() => setDel(0)}
+        onClose={() => !deletingAccount && setDel(0)}
         title="Konfirmasi terakhir"
         actions={
           <>
-            <Button variant="danger" full disabled={confirmText !== 'HAPUS'} onClick={() => (setDel(0), logout())}>
-              Hapus Akun Permanen
+            <Button
+              variant="danger"
+              full
+              disabled={confirmText !== 'HAPUS' || deletingAccount}
+              onClick={async () => {
+                setDeletingAccount(true)
+                try {
+                  await authApi.deleteAccount()
+                  setDel(0)
+                  setConfirmText('')
+                  toast.show('Akun berhasil dihapus permanen')
+                  await logout()
+                } catch (err) {
+                  toast.show(err instanceof Error ? err.message : 'Gagal menghapus akun')
+                } finally {
+                  setDeletingAccount(false)
+                }
+              }}
+            >
+              {deletingAccount ? 'Menghapus...' : 'Hapus Akun Permanen'}
             </Button>
-            <Button variant="ghost" full onClick={() => setDel(0)}>
+            <Button variant="ghost" full disabled={deletingAccount} onClick={() => setDel(0)}>
               Batal
             </Button>
           </>

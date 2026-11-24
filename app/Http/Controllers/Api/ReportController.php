@@ -10,6 +10,8 @@ use App\Models\PencocokanKandidat;
 use App\Models\RiwayatLaporan;
 use App\Models\Stasiun;
 use App\Models\BastPengambilan;
+use App\Services\NotificationService;
+use App\Services\PaymentGatewayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +50,18 @@ class ReportController
             'secret'         => 'nullable|string|max:500',
             'notify'         => 'boolean',
         ]);
+
+        // Stage-1 Anti-Spam: limit active reports created today per account
+        $todayActiveCount = LaporanBarangHilang::where('user_id', $request->user()->id)
+            ->whereDate('created_at', today())
+            ->whereNotIn('status', ['selesai', 'dibatalkan', 'kedaluwarsa'])
+            ->count();
+
+        if ($todayActiveCount >= 5) {
+            return response()->json([
+                'message' => 'Batas maksimal 5 laporan aktif per hari telah tercapai.',
+            ], 422);
+        }
 
         $stasiunDari = Stasiun::where('nama', $request->input('from'))->firstOrFail();
         $stasiunKe   = Stasiun::where('nama', $request->input('to'))->firstOrFail();
@@ -380,93 +394,32 @@ class ReportController
             ->with(['items.kategori', 'stasiunDari', 'stasiunKe'])
             ->firstOrFail();
 
-        // Remove any previously auto-linked candidates that do not accurately match (< 50 score)
-        $existingLinks = $laporan->pencocokan()->with('barangTemuan.stasiunTemuan')->get();
-        foreach ($existingLinks as $link) {
-            if (! $link->barangTemuan || \App\Services\CandidateMatcher::score($laporan, $link->barangTemuan) < 50) {
-                $link->delete();
-            }
+        // Stage-1 Trust Gate: do not expose warehouse candidates while report is still in 'diterima' or 'pencarian'
+        if (! in_array($laporan->status, ['kandidat', 'ditinjau', 'perlu_info', 'ditolak'])) {
+            return response()->json([]);
         }
 
-        // Run accurate multi-factor matching against Tersimpan warehouse items
-        $katIds = $laporan->items->pluck('kategori_id')->toArray();
-        $warehouseItems = \App\Models\BarangTemuan::with('stasiunTemuan')
-            ->whereIn('status_simpan', ['Tersimpan', 'Dalam Klaim'])
-            ->whereIn('kategori_id', $katIds)
-            ->orderByDesc('id')
-            ->get();
-
-        $seenKeys = [];
-        foreach ($warehouseItems as $bt) {
-            $dedupKey = mb_strtolower(trim($bt->nama_barang) . '|' . trim($bt->warna ?? ''));
-            if (isset($seenKeys[$dedupKey])) {
-                continue;
-            }
-
-            $score = \App\Services\CandidateMatcher::score($laporan, $bt);
-            if ($score >= 50) {
-                $seenKeys[$dedupKey] = true;
-                PencocokanKandidat::updateOrCreate(
-                    ['laporan_id' => $laporan->id, 'barang_temuan_id' => $bt->id],
-                    ['skor_kecocokan' => $score, 'status_cocok' => 'pending']
-                );
-            }
-        }
-
-        // If no existing warehouse item matches this specific item, provision an accurate match for the report's item
-        if ($laporan->pencocokan()->count() === 0) {
-            $firstItem = $laporan->items->first();
-            if ($firstItem) {
-                $lastNum = \App\Models\BarangTemuan::max('id') ?? 0;
-                $btKode = 'FND-' . str_pad($lastNum + 420, 4, '0', STR_PAD_LEFT);
-                $bt = \App\Models\BarangTemuan::create([
-                    'kode'              => $btKode,
-                    'petugas_id'        => 1,
-                    'stasiun_temuan_id' => $laporan->stasiun_ke_id ?? $laporan->stasiun_dari_id,
-                    'kategori_id'       => $firstItem->kategori_id,
-                    'nama_barang'       => $firstItem->nama_barang,
-                    'warna'             => $firstItem->warna ?? 'Hitam',
-                    'lokasi_spesifik'   => $laporan->posisi_terakhir ?: 'Gerbong KRL',
-                    'tanggal_temuan'    => now()->toDateString(),
-                    'waktu_temuan'      => now()->format('H:i'),
-                    'status_simpan'     => 'Tersimpan',
-                    'expires_in'        => 30,
-                    'secret'            => [
-                        'detail' => $laporan->ciri_rahasia ?: $firstItem->nama_barang,
-                        'serial' => '-',
-                        'locker' => 'Loker Posko CS',
-                        'notes'  => 'Ditemukan di rute ' . ($laporan->stasiunDari?->nama ?? '') . ' - ' . ($laporan->stasiunKe?->nama ?? ''),
-                    ],
-                ]);
-
-                PencocokanKandidat::create([
-                    'laporan_id'       => $laporan->id,
-                    'barang_temuan_id' => $bt->id,
-                    'skor_kecocokan'   => 92,
-                    'status_cocok'     => 'pending',
-                ]);
-            }
-        }
-
+        // Only return candidates that were legitimately linked by CS auto-match or CS manual match (with blind masking)
         $candidates = $laporan->pencocokan()
             ->with(['barangTemuan.kategori', 'barangTemuan.stasiunTemuan'])
             ->orderByDesc('skor_kecocokan')
             ->get()
+            ->filter(fn ($p) => (bool) $p->barangTemuan)
             ->map(function ($p) {
                 $bt = $p->barangTemuan;
                 $matchLabel = $p->skor_kecocokan >= 75 ? 'Tinggi' : ($p->skor_kecocokan >= 55 ? 'Sedang' : 'Rendah');
 
                 return [
                     'id'    => $bt->kode,
-                    'cat'   => $bt->kategori->nama,
-                    'desc'  => $bt->nama_barang . ' • ' . ($bt->lokasi_spesifik ?: 'Gerbong'),
-                    'found' => 'Ditemukan ' . $bt->tanggal_temuan->translatedFormat('j M') . ', ' . $bt->waktu_temuan,
-                    'posko' => 'Posko CS St. ' . $bt->stasiunTemuan->nama,
+                    'cat'   => $bt->kategori?->nama ?? 'Barang',
+                    'desc'  => ($bt->kategori?->nama ?? 'Barang') . ' • Warna ' . ($bt->warna ?: 'Tidak spesifik'),
+                    'found' => 'Ditemukan ' . $bt->tanggal_temuan->translatedFormat('j M') . ', ' . ($bt->waktu_temuan ?? '-'),
+                    'posko' => 'Posko CS St. ' . ($bt->stasiunTemuan?->nama ?? '-'),
                     'match' => $matchLabel,
                     'score' => $p->skor_kecocokan,
                 ];
             })
-            ->unique(fn ($c) => mb_strtolower($c['desc'] . '|' . $c['posko']))
+            ->unique(fn ($c) => mb_strtolower($c['id']))
             ->values();
 
         return response()->json($candidates);
@@ -500,60 +453,71 @@ class ReportController
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
+        // Stage-2 Trust Gate: require CS-linked candidate status before claiming
+        if (! in_array($laporan->status, ['kandidat', 'perlu_info', 'ditolak'])) {
+            return response()->json([
+                'message' => 'Belum ada kandidat barang yang ditautkan petugas CS untuk laporan ini.',
+            ], 422);
+        }
+
+        // Anti-abuse: lock online claim after 2 rejections
+        if ($laporan->klaim()->where('status_verifikasi', 'ditolak')->count() >= 2) {
+            return response()->json([
+                'message' => 'Batas pengajuan klaim online (2x) telah tercapai. Silakan datang langsung ke Posko CS.',
+            ], 422);
+        }
+
         if ($request->filled('nik')) {
             $request->user()->update(['nik' => $request->input('nik')]);
         }
 
         $createdKlaim = null;
+        $claimedCount = 0;
 
-        DB::transaction(function () use ($request, $laporan, &$createdKlaim) {
+        DB::transaction(function () use ($request, $laporan, &$createdKlaim, &$claimedCount) {
             foreach ($request->input('candidates') as $fndKode) {
                 $pencocokan = $laporan->pencocokan()
+                    ->with('barangTemuan')
                     ->whereHas('barangTemuan', fn ($q) => $q->where('kode', $fndKode)->orWhere('id', is_numeric($fndKode) ? (int) $fndKode : -1))
                     ->first();
 
-                $barangTemuanId = $pencocokan?->barang_temuan_id;
-
-                if (! $barangTemuanId) {
-                    $bt = \App\Models\BarangTemuan::where('kode', $fndKode)
-                        ->when(is_numeric($fndKode), fn ($q) => $q->orWhere('id', (int) $fndKode))
-                        ->first()
-                        ?? \App\Models\BarangTemuan::whereIn('kategori_id', $laporan->items()->pluck('kategori_id'))->first()
-                        ?? \App\Models\BarangTemuan::first();
-
-                    $barangTemuanId = $bt?->id;
-
-                    if ($barangTemuanId) {
-                        PencocokanKandidat::firstOrCreate(
-                            ['laporan_id' => $laporan->id, 'barang_temuan_id' => $barangTemuanId],
-                            ['skor_kecocokan' => 85, 'status_cocok' => 'pending']
-                        );
-                    }
+                if (! $pencocokan || ! $pencocokan->barangTemuan) {
+                    continue;
                 }
 
-                if (! $barangTemuanId) {
-                    continue;
+                $bt = $pencocokan->barangTemuan;
+                if ($bt->status_simpan === 'Tersimpan') {
+                    $bt->update(['status_simpan' => 'Dalam Klaim']);
                 }
 
                 $createdKlaim = KlaimVerifikasi::create([
                     'kode'              => KlaimVerifikasi::generateKode(),
                     'laporan_id'        => $laporan->id,
-                    'barang_temuan_id'  => $barangTemuanId,
+                    'barang_temuan_id'  => $bt->id,
                     'jawaban_rahasia'   => $request->input("answers.{$fndKode}", ''),
                     'nik'               => $request->input('nik') ?: $request->user()->nik,
                     'bukti_tambahan'    => $request->input('ktp_url'),
                     'status_verifikasi' => 'menunggu',
                 ]);
+                $claimedCount++;
             }
 
-            $laporan->update(['status' => 'ditinjau']);
+            if ($claimedCount > 0) {
+                $laporan->update(['status' => 'ditinjau']);
 
-            RiwayatLaporan::create([
-                'laporan_id' => $laporan->id,
-                'waktu'      => now()->format('H:i'),
-                'keterangan' => 'Klaim diajukan',
-            ]);
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => 'Klaim diajukan',
+                ]);
+            }
         });
+
+        if ($claimedCount === 0) {
+            return response()->json([
+                'message' => 'Kandidat barang tidak valid atau tidak tertaut dengan laporan Anda.',
+            ], 422);
+        }
 
         return response()->json([
             'claim_id' => $createdKlaim?->id,
@@ -603,6 +567,8 @@ class ReportController
             'metode_ambil'   => $method,
         ];
 
+        $snap = null;
+
         if ($method === 'stasiun') {
             $bastData['stasiun_ambil_id'] = $laporan->stasiunKe->id;
             $bastData['kode_qr'] = $existingBast?->kode_qr ?? ('KCI-' . now()->year . '-' . str_pad($laporan->id, 3, '0', STR_PAD_LEFT));
@@ -626,17 +592,38 @@ class ReportController
                 $request->input('city'),
                 $request->input('zip'),
             ])) ?: 'Bogor Tengah, Kota Bogor';
-            $bastData['kurir']        = $courier;
-            $bastData['ongkir']       = $ongkir;
-            $bastData['status_bayar'] = 'lunas';
+            $bastData['kurir']  = $courier;
+            $bastData['ongkir'] = $ongkir;
 
-            $laporan->update(['status' => 'dikirim']);
+            $pg = app(PaymentGatewayService::class);
+            if ($pg->isConfigured()) {
+                $tempBast = $existingBast ?? new BastPengambilan($bastData);
+                $tempBast->kode = $bastData['kode'];
+                $tempBast->ongkir = $ongkir;
+                $snap = $pg->createSnapTransaction($tempBast, [
+                    'name'  => $request->input('name') ?: $request->user()->name,
+                    'wa'    => $request->input('wa') ?: $request->user()->phone,
+                    'email' => $request->user()->email,
+                ]);
+            }
 
-            RiwayatLaporan::create([
-                'laporan_id' => $laporan->id,
-                'waktu'      => now()->format('H:i'),
-                'keterangan' => 'Memilih pengiriman via ekspedisi - ' . $courier,
-            ]);
+            if ($snap) {
+                $bastData['status_bayar'] = 'pending';
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => 'Menunggu pembayaran ongkir ekspedisi - ' . $courier,
+                ]);
+            } else {
+                $bastData['status_bayar'] = 'lunas';
+                $laporan->update(['status' => 'dikirim']);
+
+                RiwayatLaporan::create([
+                    'laporan_id' => $laporan->id,
+                    'waktu'      => now()->format('H:i'),
+                    'keterangan' => 'Memilih pengiriman via ekspedisi - ' . $courier,
+                ]);
+            }
         }
 
         if ($existingBast) {
@@ -647,11 +634,50 @@ class ReportController
         }
 
         return response()->json([
-            'bast_id' => $bast->id,
-            'bast'    => $bast->kode,
-            'qr'      => $bast->kode_qr,
-            'report'  => $laporan->fresh()->toReportArray(),
+            'bast_id'     => $bast->id,
+            'bast'        => $bast->kode,
+            'qr'          => $bast->kode_qr,
+            'payment_url' => $snap['redirect_url'] ?? null,
+            'snap_token'  => $snap['token'] ?? null,
+            'report'      => $laporan->fresh()->toReportArray(),
         ]);
+    }
+
+    /**
+     * GET /api/notifications — real-time in-app notifications from report history.
+     */
+    public function notifications(Request $request): JsonResponse
+    {
+        $items = RiwayatLaporan::with('laporan')
+            ->whereHas('laporan', fn ($q) => $q->where('user_id', $request->user()->id))
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get()
+            ->map(function (RiwayatLaporan $h) {
+                $lap = $h->laporan;
+                $text = (string) $h->keterangan;
+                $title = match (true) {
+                    str_contains(strtolower($text), 'disetujui') => 'Klaim Disetujui & BAST Terbit',
+                    str_contains(strtolower($text), 'kandidat') || str_contains(strtolower($text), 'ditautkan') => 'Kandidat Barang Ditemukan',
+                    str_contains(strtolower($text), 'ditolak') => 'Klaim Belum Disetujui',
+                    str_contains(strtolower($text), 'info') => 'Permintaan Info Tambahan CS',
+                    str_contains(strtolower($text), 'kurir') || str_contains(strtolower($text), 'resi') => 'Update Pengiriman Ekspedisi',
+                    str_contains(strtolower($text), 'selesai') => 'Barang Berhasil Diterima',
+                    default => 'Pembaruan Laporan',
+                };
+
+                return [
+                    'id'        => $h->id,
+                    'report_id' => $lap?->kode ?? '',
+                    'title'     => $title,
+                    'body'      => ($lap ? "#{$lap->kode} • " : '') . $text,
+                    't'         => $h->created_at?->isToday() ? $h->waktu : ($h->created_at?->format('j M, H:i') ?? $h->waktu),
+                    'unread'    => (bool) ($h->created_at && $h->created_at->gt(now()->subHours(24))),
+                ];
+            })
+            ->values();
+
+        return response()->json($items);
     }
 
     /**

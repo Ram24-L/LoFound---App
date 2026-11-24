@@ -178,12 +178,8 @@ export function PassengerApp() {
             go('auth', { mode })
           }}
           onOtpDone={async (phone, otp) => {
-            try {
-              const res = await authApi.otpLogin(phone, otp)
-              finishLogin(res.user)
-            } catch {
-              finishLogin({ contact: phone })
-            }
+            const res = await authApi.otpLogin(phone, otp)
+            finishLogin(res.user)
           }}
         />
       </div>
@@ -241,22 +237,36 @@ function LoginGate({
   hasDraft: boolean
   onClose: () => void
   onGoAuth: (mode: 'login' | 'register') => void
-  onOtpDone: (phone: string, otp: string) => void
+  onOtpDone: (phone: string, otp: string) => Promise<void>
   onClearDraft: () => void
 }) {
   const [step, setStep] = useState<'main' | 'phone' | 'otp'>('main')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [err, setErr] = useState('')
+  const [devOtp, setDevOtp] = useState<string | null>(null)
+  const [resendSec, setResendSec] = useState(0)
+  const [resending, setResending] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (step !== 'otp' || resendSec <= 0) return
+    const t = window.setTimeout(() => setResendSec((s) => Math.max(0, s - 1)), 1000)
+    return () => window.clearTimeout(t)
+  }, [step, resendSec])
+
+  const validOtpContact = (v: string) => /^\S+@\S+\.\S+$/.test(v) || /^08\d{8,11}$/.test(v.replace(/\D/g, ''))
+
   const close = () => {
     setStep('main')
     setErr('')
     setOtp('')
+    setDevOtp(null)
+    setResendSec(0)
     onClose()
   }
   return (
-    <Sheet open={!!gate} onClose={close} title={step === 'main' ? 'Masuk untuk melanjutkan' : step === 'phone' ? 'Masuk dengan WhatsApp' : 'Masukkan Kode OTP'}>
+    <Sheet open={!!gate} onClose={close} title={step === 'main' ? 'Masuk untuk melanjutkan' : step === 'phone' ? 'Masuk dengan OTP' : 'Masukkan Kode OTP'}>
       {step === 'main' && gate && (
         <div className="flex flex-col gap-4">
           <div className="flex gap-3 rounded-2xl bg-tint p-3.5">
@@ -271,7 +281,7 @@ function LoginGate({
               Daftar Akun
             </Button>
             <Button variant="tint" size="lg" full icon={MessageCircle} onClick={() => setStep('phone')}>
-              Lanjut dengan Nomor WhatsApp (OTP)
+              Lanjut dengan OTP (Email / WA)
             </Button>
           </div>
           <div className="flex items-center justify-between">
@@ -290,18 +300,28 @@ function LoginGate({
       {step === 'phone' && (
         <form
           className="flex flex-col gap-4"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
-            if (!/^08\d{8,11}$/.test(phone.replace(/\D/g, ''))) return setErr('Masukkan nomor WhatsApp yang valid (contoh: 0812xxxx).')
+            if (!validOtpContact(phone)) return setErr('Masukkan email atau nomor WhatsApp yang valid (contoh: 0812xxxx).')
             setErr('')
-            setStep('otp')
+            setBusy(true)
+            try {
+              const res = await authApi.sendOtp(phone)
+              setDevOtp(res.dev_otp ?? null)
+              setResendSec(45)
+              setStep('otp')
+            } catch (error: any) {
+              setErr(error?.message || 'Gagal mengirim kode OTP.')
+            } finally {
+              setBusy(false)
+            }
           }}
         >
-          <Field label="Nomor WhatsApp" error={err}>
-            {(a) => <input {...a} inputMode="tel" autoFocus value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0812xxxxxxxx" className={inputCls(!!err) + ' h-12'} />}
+          <Field label="Email / Nomor WhatsApp" error={err}>
+            {(a) => <input {...a} autoFocus value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="nama@email.com atau 0812xxxxxxxx" className={inputCls(!!err) + ' h-12'} />}
           </Field>
-          <Button variant="cta" size="lg" full type="submit">
-            Kirim Kode OTP
+          <Button variant="cta" size="lg" full type="submit" loading={busy}>
+            {busy ? 'Mengirim...' : 'Kirim Kode OTP'}
           </Button>
           <button type="button" onClick={() => setStep('main')} className="min-h-11 text-sm font-semibold text-muted">
             Kembali
@@ -311,23 +331,31 @@ function LoginGate({
       {step === 'otp' && (
         <form
           className="flex flex-col gap-4"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             if (otp.length !== 6) return setErr('Kode OTP terdiri dari 6 angka.')
             setErr('')
             setBusy(true)
-            setTimeout(() => {
-              setBusy(false)
+            try {
+              await onOtpDone(phone, otp)
               setStep('main')
-              const p = phone
-              const o = otp
               setOtp('')
-              onOtpDone(p, o)
-            }, 600)
+              setDevOtp(null)
+              setResendSec(0)
+            } catch (error: any) {
+              setErr(error?.message || 'Kode OTP tidak valid atau sudah kedaluwarsa.')
+            } finally {
+              setBusy(false)
+            }
           }}
         >
           <p className="text-sm text-muted">
-            Kode verifikasi 6 digit telah dikirim via WhatsApp ke <b className="text-ink">{phone.slice(0, 4)}****{phone.slice(-3)}</b>.
+            Kode verifikasi 6 digit telah dikirim ke <b className="text-ink">{phone.includes('@') ? phone : `${phone.slice(0, 4)}****${phone.slice(-3)}`}</b>.
+            {devOtp && (
+              <span className="mt-1 block rounded-xl bg-tint px-3 py-1.5 text-xs font-bold text-primary">
+                Mode Dev (SMTP/WA belum diisi): Kode OTP Anda {devOtp}
+              </span>
+            )}
           </p>
           <Field label="Kode OTP (6 angka)" error={err}>
             {(a) => (
@@ -345,7 +373,32 @@ function LoginGate({
           <Button variant="cta" size="lg" full type="submit" loading={busy}>
             {busy ? 'Memproses...' : 'Verifikasi & Masuk'}
           </Button>
-          <p className="text-center text-xs text-muted">Kirim ulang kode dalam 00:45</p>
+          <div className="text-center text-xs">
+            {resendSec > 0 ? (
+              <p className="text-muted">Kirim ulang kode dalam 00:{String(resendSec).padStart(2, '0')}</p>
+            ) : (
+              <button
+                type="button"
+                disabled={resending}
+                onClick={async () => {
+                  setResending(true)
+                  setErr('')
+                  try {
+                    const res = await authApi.sendOtp(phone)
+                    setDevOtp(res.dev_otp ?? null)
+                    setResendSec(45)
+                  } catch (error: any) {
+                    setErr(error?.message || 'Gagal mengirim ulang kode OTP.')
+                  } finally {
+                    setResending(false)
+                  }
+                }}
+                className="min-h-10 font-bold text-primary hover:underline disabled:opacity-50"
+              >
+                {resending ? 'Mengirim ulang...' : 'Kirim Ulang Kode'}
+              </button>
+            )}
+          </div>
         </form>
       )}
     </Sheet>

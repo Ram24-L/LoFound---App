@@ -13,6 +13,7 @@ use App\Models\LaporanBarangHilang;
 use App\Models\PencocokanKandidat;
 use App\Models\RiwayatLaporan;
 use App\Models\Stasiun;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -178,6 +179,12 @@ class StaffCsController extends Controller
                     'waktu'      => now()->format('H:i'),
                     'keterangan' => "Kandidat barang ditemukan: {$kode}",
                 ]);
+                NotificationService::notifyReport(
+                    $laporan,
+                    'Kandidat Barang Cocok Ditemukan',
+                    'Petugas menemukan barang yang berpotensi cocok dengan laporan Anda. Silakan buka aplikasi LoFound untuk mengajukan klaim.',
+                    ['details' => ['Kode Temuan' => $kode]]
+                );
             }
 
             AuditLog::record(null, 'Sistem', 'Cocokkan otomatis', "{$kode} → {$laporan->kode}");
@@ -284,6 +291,12 @@ class StaffCsController extends Controller
                 'waktu'      => now()->format('H:i'),
                 'keterangan' => "Ditautkan manual ke {$kode} oleh {$user->name}",
             ]);
+            NotificationService::notifyReport(
+                $laporan,
+                'Kandidat Barang Ditemukan',
+                'Petugas CS telah menautkan kandidat barang yang cocok dengan laporan Anda. Silakan buka aplikasi LoFound untuk mengajukan klaim.',
+                ['details' => ['Kode Temuan' => $kode]]
+            );
         }
 
         AuditLog::record($user->id, $user->name . ' (CS)', 'Cocokkan manual', "{$kode} → {$reportKode}");
@@ -389,6 +402,16 @@ class StaffCsController extends Controller
 
             AuditLog::record($user->id, $user->name . ' (CS)', 'Setujui klaim & terbitkan BAST', "{$klaim->kode} • BAST {$bastKode}");
 
+            NotificationService::notifyReport(
+                $klaim->laporan,
+                'Klaim Disetujui & BAST Digital Terbit',
+                "Selamat! Klaim Anda disetujui dan BAST {$bastKode} telah terbit. Silakan pilih pengambilan di stasiun atau kirim ekspedisi.",
+                [
+                    'details'     => ['Kode BAST' => $bastKode, 'Kode Klaim' => $klaim->kode],
+                    'action_text' => 'Buka BAST Digital',
+                ]
+            );
+
             return response()->json([
                 'claim'   => $this->mapClaim($klaim->fresh(['laporan.detailBarang.kategori', 'laporan.user', 'barangTemuan', 'verifier'])),
                 'bast'    => $bastKode,
@@ -407,6 +430,10 @@ class StaffCsController extends Controller
 
             $klaim->laporan->update(['status' => 'ditolak']);
 
+            if ($klaim->barangTemuan && $klaim->barangTemuan->status_simpan === 'Dalam Klaim') {
+                $klaim->barangTemuan->update(['status_simpan' => 'Tersimpan']);
+            }
+
             RiwayatLaporan::create([
                 'laporan_id' => $klaim->laporan->id,
                 'waktu'      => now()->format('H:i'),
@@ -414,6 +441,13 @@ class StaffCsController extends Controller
             ]);
 
             AuditLog::record($user->id, $user->name . ' (CS)', 'Tolak klaim', $klaim->kode, 'Ditolak: ' . $request->input('template', 'Ciri tidak sesuai'));
+
+            NotificationService::notifyReport(
+                $klaim->laporan,
+                'Klaim Belum Disetujui',
+                'Klaim Anda belum dapat disetujui CS: ' . $request->input('note', 'Ciri tidak sesuai'),
+                ['tone' => 'danger', 'details' => ['Kode Klaim' => $klaim->kode]]
+            );
 
             return response()->json([
                 'claim' => $this->mapClaim($klaim->fresh(['laporan.detailBarang.kategori', 'laporan.user', 'barangTemuan', 'verifier'])),
@@ -429,6 +463,17 @@ class StaffCsController extends Controller
             ]);
 
             AuditLog::record($user->id, $user->name . ' (CS)', 'Minta info tambahan', $klaim->kode);
+
+            NotificationService::notifyReport(
+                $klaim->laporan,
+                'Petugas CS Meminta Info Tambahan',
+                $request->input('message', 'Mohon lengkapi bukti kepemilikan Anda di aplikasi LoFound.'),
+                [
+                    'tone'        => 'warning',
+                    'details'     => ['Kode Klaim' => $klaim->kode],
+                    'action_text' => 'Lengkapi Informasi',
+                ]
+            );
 
             return response()->json(['ok' => true]);
         }
@@ -509,6 +554,13 @@ class StaffCsController extends Controller
         ]);
 
         AuditLog::record($user->id, $user->name . ' (CS)', 'Serah terima BAST', $bast->kode);
+
+        NotificationService::notifyReport(
+            $laporan,
+            'Serah Terima Barang Selesai',
+            "Barang Anda dengan BAST {$bast->kode} telah diserahkan oleh Petugas CS. Terima kasih telah menggunakan LoFound.",
+            ['details' => ['Kode BAST' => $bast->kode]]
+        );
 
         return response()->json([
             'result'  => 'done',
@@ -623,6 +675,7 @@ class StaffCsController extends Controller
             'status'          => $k->status_verifikasi,
             'answer'          => $k->jawaban_rahasia ?: ($laporan?->ciri_rahasia ?? ''),
             'note'            => $k->catatan_cs,
+            'isClaimSubmitted' => true,
         ];
     }
 
@@ -666,6 +719,8 @@ class StaffCsController extends Controller
             'status'          => 'menunggu',
             'answer'          => $laporan->ciri_rahasia ?: "Posisi: {$laporan->posisi_terakhir} ({$laporan->stasiunDari?->nama} → {$laporan->stasiunKe?->nama})",
             'note'            => null,
+            'isClaimSubmitted' => false,
+            'reportStatus'     => $laporan->status,
         ];
     }
 }

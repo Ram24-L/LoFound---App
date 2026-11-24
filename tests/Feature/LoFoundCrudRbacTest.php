@@ -667,4 +667,212 @@ class LoFoundCrudRbacTest extends TestCase
         $trxRes->assertStatus(200);
         $this->assertNotEmpty($trxRes->json());
     }
+
+    /**
+     * TC-11 (2-Stage Trust Model & Anti-Abuse Blind Candidates):
+     * 1. Laporan baru (status diterima) mengembalikan [] di /candidates dan ditolak (422) jika langsung /claim.
+     * 2. Setelah CS menautkan barang temuan via /match, /candidates mengembalikan kandidat termasking (tanpa nama_barang persis).
+     * 3. Klaim barang tak tertaut ditolak (422); klaim barang tertaut berhasil (200) dan meng-hold barang temuan ('Dalam Klaim').
+     * 4. Penolakan klaim oleh CS melepas kembali status barang temuan menjadi 'Tersimpan'.
+     */
+    public function test_tc11_two_stage_trust_anti_abuse_and_blind_candidates(): void
+    {
+        $passenger = $this->getOrCreatePassenger('trust.user@mail.com', 'Penumpang Trust');
+        $cs        = $this->getOrCreateStaff('cs', 'rina.k@kci.id', 'Rina Kurniasih');
+
+        // 1. CS records a warehouse item first
+        $foundRes = $this->actingAs($cs)->postJson('/api/staff/cs/found-items', [
+            'cat'     => 'Elektronik',
+            'name'    => 'MacBook Pro M3 Space Black',
+            'color'   => 'Hitam',
+            'station' => 'Manggarai',
+            'detail'  => 'Ada stiker unik KRL Commuter di pojok kiri',
+            'serial'  => 'MBP-' . strtoupper(Str::random(6)),
+            'locker'  => 'Loker C-01',
+        ])->assertStatus(200);
+        $foundKode = $foundRes->json('item.code');
+
+        // Unrelated item in warehouse
+        $otherRes = $this->actingAs($cs)->postJson('/api/staff/cs/found-items', [
+            'cat'     => 'Elektronik',
+            'name'    => 'iPhone 15 Pro Titanium',
+            'color'   => 'Silver',
+            'station' => 'Jakarta Kota',
+            'detail'  => 'Case transparan',
+            'serial'  => 'IPH-' . strtoupper(Str::random(6)),
+            'locker'  => 'Loker C-02',
+        ])->assertStatus(200);
+        $otherKode = $otherRes->json('item.code');
+
+        // 2. Passenger submits a generic Stage-1 report with an unrelated category first so it stays 'diterima'
+        $repRes = $this->actingAs($passenger)->postJson('/api/reports', [
+            'items'    => [['name' => 'Laptop Kerja Hitam', 'category' => 'Non Elektronik', 'color' => 'Hitam']],
+            'from'     => 'Bogor',
+            'to'       => 'Manggarai',
+            'date'     => now()->toDateString(),
+            'time'     => '09:00',
+            'position' => 'Gerbong 4',
+            'secret'   => 'Ada stiker unik KRL Commuter di pojok kiri atas',
+        ])->assertStatus(201);
+        $reportKode = $repRes->json('report.id');
+
+        // Stage-1 check: candidates endpoint returns [] and direct claim is rejected (422)
+        $this->actingAs($passenger)->getJson("/api/reports/{$reportKode}/candidates")
+            ->assertStatus(200)
+            ->assertExactJson([]);
+
+        $this->actingAs($passenger)->postJson("/api/reports/{$reportKode}/claim", [
+            'candidates' => [$foundKode],
+            'answers'    => [$foundKode => 'Coba nebak barang temuan di gudang tanpa tautan CS'],
+        ])->assertStatus(422);
+
+        // 3. CS manually links the warehouse item -> report moves to 'kandidat'
+        $this->actingAs($cs)->postJson("/api/staff/cs/found-items/{$foundKode}/match", [
+            'report_kode' => $reportKode,
+        ])->assertStatus(200);
+
+        $candsRes = $this->actingAs($passenger)->getJson("/api/reports/{$reportKode}/candidates")
+            ->assertStatus(200);
+        $cands = $candsRes->json();
+        $this->assertCount(1, $cands);
+        $this->assertEquals($foundKode, $cands[0]['id']);
+        $this->assertStringNotContainsString('MacBook Pro M3 Space Black', $cands[0]['desc']);
+
+        // Claiming an unlinked warehouse item code is still rejected (422)
+        $this->actingAs($passenger)->postJson("/api/reports/{$reportKode}/claim", [
+            'candidates' => [$otherKode],
+            'answers'    => [$otherKode => 'Mencoba klaim barang lain yang tidak ditautkan'],
+        ])->assertStatus(422);
+
+        // Claiming the CS-linked item succeeds and puts found item into 'Dalam Klaim'
+        $claimRes = $this->actingAs($passenger)->postJson("/api/reports/{$reportKode}/claim", [
+            'candidates' => [$foundKode],
+            'answers'    => [$foundKode => 'Ada stiker unik KRL Commuter di pojok kiri laptop saya.'],
+            'nik'        => '3201888877776666',
+        ])->assertStatus(200);
+        $claimId = $claimRes->json('claim_id');
+
+        $bt = \App\Models\BarangTemuan::where('kode', $foundKode)->first();
+        $this->assertEquals('Dalam Klaim', $bt->status_simpan);
+
+        // 4. Rejecting the claim releases the found item back to 'Tersimpan'
+        $this->actingAs($cs)->postJson("/api/staff/cs/claims/{$claimId}/verify", [
+            'action' => 'reject',
+            'note'   => 'Ciri rahasia belum cocok dengan kondisi fisik di gudang.',
+        ])->assertStatus(200);
+
+        $bt->refresh();
+        $this->assertEquals('Tersimpan', $bt->status_simpan);
+    }
+
+    /**
+     * TC-12 (Production Readiness: OTP Cache, Payment Webhook SHA-512, Real Notifications, Private KTP, Maintenance):
+     */
+    public function test_tc12_production_readiness_otp_webhooks_notifications_and_private_ktp(): void
+    {
+        $passenger = $this->getOrCreatePassenger('prod.user@mail.com', 'Penumpang Production');
+        $otherUser = $this->getOrCreatePassenger('other.user@mail.com', 'Penumpang Lain');
+        $cs        = $this->getOrCreateStaff('cs', 'rina.k@kci.id', 'Rina Kurniasih');
+
+        // 1. Real OTP send & verify via Cache
+        $otpSend = $this->postJson('/api/auth/otp/send', ['contact' => '081299990001']);
+        $otpSend->assertStatus(200);
+        $devOtp = $otpSend->json('dev_otp');
+        $this->assertNotEmpty($devOtp);
+
+        // Wrong OTP fails (422)
+        $this->postJson('/api/auth/otp', ['phone' => '081299990001', 'otp' => '000000'])
+            ->assertStatus(422);
+
+        // Correct OTP succeeds (200)
+        $this->postJson('/api/auth/otp', ['phone' => '081299990001', 'otp' => $devOtp])
+            ->assertStatus(200)
+            ->assertJsonStructure(['token', 'user']);
+
+        // 2. Payment Webhook signature check & state transition
+        $report = LaporanBarangHilang::create([
+            'kode'             => LaporanBarangHilang::generateKode(),
+            'user_id'          => $passenger->id,
+            'stasiun_dari_id'  => Stasiun::first()->id,
+            'stasiun_ke_id'    => Stasiun::first()->id,
+            'tanggal_kejadian' => now()->toDateString(),
+            'waktu_kejadian'   => '10:00',
+            'posisi_terakhir'  => 'Gerbong 1',
+            'ciri_rahasia'     => 'Ciri rahasia produksi terverifikasi',
+            'status'           => 'bast',
+            'notify'           => true,
+        ]);
+
+        $bt = \App\Models\BarangTemuan::first();
+        $klaim = KlaimVerifikasi::create([
+            'kode'              => KlaimVerifikasi::generateKode(),
+            'laporan_id'        => $report->id,
+            'barang_temuan_id'  => $bt->id,
+            'jawaban_rahasia'   => 'Ciri rahasia produksi terverifikasi',
+            'status_verifikasi' => 'disetujui',
+        ]);
+
+        $bast = BastPengambilan::create([
+            'kode'         => BastPengambilan::generateKode(),
+            'klaim_id'     => $klaim->id,
+            'metode_ambil' => 'ekspedisi',
+            'kurir'        => 'KAI Logistik Express',
+            'ongkir'       => 25500,
+            'status_bayar' => 'pending',
+        ]);
+
+        config()->set('services.midtrans.server_key', 'test-midtrans-secret');
+        $invalidSigRes = $this->postJson('/api/webhooks/payment', [
+            'order_id'           => $bast->kode,
+            'status_code'        => '200',
+            'gross_amount'       => '25500.00',
+            'signature_key'      => 'invalid-sig',
+            'transaction_status' => 'settlement',
+        ]);
+        $invalidSigRes->assertStatus(403);
+
+        $validSig = hash('sha512', $bast->kode . '200' . '25500.00' . 'test-midtrans-secret');
+        $validSigRes = $this->postJson('/api/webhooks/payment', [
+            'order_id'           => $bast->kode,
+            'status_code'        => '200',
+            'gross_amount'       => '25500.00',
+            'signature_key'      => $validSig,
+            'transaction_status' => 'settlement',
+        ]);
+        $validSigRes->assertStatus(200);
+
+        $bast->refresh();
+        $report->refresh();
+        $this->assertEquals('lunas', $bast->status_bayar);
+        $this->assertEquals('dikirim', $report->status);
+
+        // 3. Notifications API
+        $this->actingAs($passenger)->getJson('/api/notifications')
+            ->assertStatus(200)
+            ->assertJsonFragment(['report_id' => $report->kode]);
+
+        // 4. Private KTP Storage & Access Control
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $file = \Illuminate\Http\UploadedFile::fake()->image('ktp.jpg');
+        $upRes = $this->actingAs($passenger)->post('/api/upload', [
+            'file'    => $file,
+            'purpose' => 'ktp',
+        ]);
+        $upRes->assertStatus(200);
+        $ktpUrl = $upRes->json('url');
+        $this->assertStringStartsWith('/api/private-files/ktp/', $ktpUrl);
+
+        $klaim->update(['bukti_tambahan' => $ktpUrl]);
+
+        $this->actingAs($otherUser)->getJson($ktpUrl)->assertStatus(403);
+        $this->actingAs($cs)->get($ktpUrl)->assertStatus(200);
+
+        $this->postJson('/api/auth/logout');
+        $this->flushSession();
+        $this->app['auth']->forgetGuards();
+        $this->getJson($ktpUrl)->assertStatus(401);
+
+        // 5. UU PDP Maintenance Command
+        $this->artisan('lofound:maintenance')->assertExitCode(0);
+    }
 }

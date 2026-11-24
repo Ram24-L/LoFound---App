@@ -146,9 +146,9 @@ export function WizardScreen() {
       setDateSheet(true)
       return
     }
-    if (secret.length > 0 && secret.length < 10) {
-      setErrors({ secret: 'Tambahkan sedikit detail lagi (min. 10 karakter).' })
-      toast('Ciri rahasia minimal 10 karakter.', { tone: 'warn' })
+    if (secret.trim().length < 15) {
+      setErrors({ secret: 'Ciri khusus rahasia wajib diisi (min. 15 karakter) sebagai dasar verifikasi.' })
+      toast('Ciri rahasia wajib diisi min. 15 karakter.', { tone: 'warn' })
       return
     }
     if (!user) {
@@ -360,6 +360,7 @@ export function WizardScreen() {
                     <Lock className="size-3.5 text-primary" aria-hidden /> Deskripsi Ciri Khusus Rahasia
                   </span>
                 }
+                required
                 counter={`${secret.length}/500`}
                 error={errors.secret}
                 helper={

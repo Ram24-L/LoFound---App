@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertCircle, ArrowLeft, Eye, EyeOff, Lock, MailCheck } from 'lucide-react'
 import { Banner, Button, Checkbox, cx, Field, IconButton, inputCls, Logo, Sheet, TrainArt } from '../lib/ui'
 import { authApi } from '../lib/api'
@@ -23,11 +23,26 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
   const [busy, setBusy] = useState(false)
   const [otpStep, setOtpStep] = useState(false)
   const [otp, setOtp] = useState('')
+  const [devOtp, setDevOtp] = useState<string | null>(null)
+  const [resendSec, setResendSec] = useState(0)
+  const [resending, setResending] = useState(false)
   const [reset, setReset] = useState<'closed' | 'form' | 'sent'>('closed')
   const [resetContact, setResetContact] = useState('')
   const locked = tries >= 5
   const reg = mode === 'register'
   const st = strength(f.pw)
+
+  useEffect(() => {
+    if (!otpStep || resendSec <= 0) return
+    const t = window.setTimeout(() => setResendSec((s) => Math.max(0, s - 1)), 1000)
+    return () => window.clearTimeout(t)
+  }, [otpStep, resendSec])
+
+  const sendRegisterOtp = async () => {
+    const res = await authApi.sendOtp(f.contact, 'register')
+    setDevOtp(res.dev_otp ?? null)
+    setResendSec(45)
+  }
 
   const validContact = (v: string) => /^\S+@\S+\.\S+$/.test(v) || /^08\d{8,11}$/.test(v.replace(/\D/g, ''))
 
@@ -46,8 +61,14 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
 
     setBusy(true)
     if (reg) {
-      setBusy(false)
-      setOtpStep(true)
+      try {
+        await sendRegisterOtp()
+        setOtpStep(true)
+      } catch (err: any) {
+        setErrors({ contact: err.message || 'Gagal mengirim kode OTP.' })
+      } finally {
+        setBusy(false)
+      }
       return
     }
 
@@ -104,7 +125,7 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
                 if (otp.length !== 6) return setErrors({ otp: 'Kode OTP terdiri dari 6 angka.' })
                 setBusy(true)
                 try {
-                  const res = await authApi.register(f.name, f.contact, f.pw)
+                  const res = await authApi.register(f.name, f.contact, f.pw, otp)
                   login(res.user)
                 } catch (err: any) {
                   setErrors({ otp: err.message || 'Pendaftaran gagal.' })
@@ -113,9 +134,16 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
                 }
               }}
             >
-              <div className="flex items-center gap-3 rounded-2xl bg-mint p-3 text-sm text-[#1f7a4a]">
-                <MailCheck className="size-5 shrink-0" aria-hidden />
-                Masukkan 6 digit kode verifikasi yang dikirim ke {f.contact}.
+              <div className="flex flex-col gap-2 rounded-2xl bg-mint p-3 text-sm text-[#1f7a4a]">
+                <div className="flex items-center gap-3">
+                  <MailCheck className="size-5 shrink-0" aria-hidden />
+                  <span>Masukkan 6 digit kode verifikasi yang dikirim ke <b>{f.contact}</b>.</span>
+                </div>
+                {devOtp && (
+                  <p className="rounded-xl bg-white/80 px-3 py-1.5 text-xs font-bold text-primary">
+                    Mode Dev (SMTP/WA belum diisi): Kode OTP Anda {devOtp}
+                  </p>
+                )}
               </div>
               <Field label="Kode OTP (6 angka)" error={errors.otp}>
                 {(a) => <input {...a} autoFocus inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} className={inputCls(!!errors.otp) + ' h-14 text-center text-2xl font-bold tracking-[0.5em]'} />}
@@ -123,6 +151,30 @@ export function AuthScreen({ mode: initial = 'login' }: { mode?: 'login' | 'regi
               <Button variant="cta" size="lg" full type="submit" loading={busy}>
                 {busy ? 'Memproses...' : 'Buat Akun & Masuk'}
               </Button>
+              <div className="text-center text-xs">
+                {resendSec > 0 ? (
+                  <p className="text-muted">Kirim ulang kode dalam 00:{String(resendSec).padStart(2, '0')}</p>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={resending}
+                    onClick={async () => {
+                      setResending(true)
+                      setErrors((er) => ({ ...er, otp: '' }))
+                      try {
+                        await sendRegisterOtp()
+                      } catch (err: any) {
+                        setErrors((er) => ({ ...er, otp: err.message || 'Gagal mengirim ulang kode OTP.' }))
+                      } finally {
+                        setResending(false)
+                      }
+                    }}
+                    className="min-h-10 font-bold text-primary hover:underline disabled:opacity-50"
+                  >
+                    {resending ? 'Mengirim ulang...' : 'Kirim Ulang Kode'}
+                  </button>
+                )}
+              </div>
             </form>
           ) : (
             <form className="mt-5 flex flex-col gap-4" onSubmit={submit} noValidate>

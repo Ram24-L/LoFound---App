@@ -153,13 +153,16 @@ export const authApi = {
     if (res.token) setTabToken('passenger', res.token)
     return res
   },
-  register: async (name: string, contact: string, password: string) => {
-    const res = await api.post<{ token?: string; user: AuthUser }>('/api/auth/register', { name, contact, password })
+  register: async (name: string, contact: string, password: string, otp?: string) => {
+    const res = await api.post<{ token?: string; user: AuthUser }>('/api/auth/register', { name, contact, password, otp })
     if (res.token) setTabToken('passenger', res.token)
     return res
   },
-  otpLogin: async (phone: string, otp: string) => {
-    const res = await api.post<{ token?: string; user: AuthUser }>('/api/auth/otp', { phone, otp })
+  sendOtp: async (contact: string, purpose?: 'login' | 'register') => {
+    return api.post<{ sent: boolean; channel?: 'email' | 'whatsapp'; live?: boolean; expires_in: number; dev_otp?: string | null }>('/api/auth/otp/send', { contact, purpose })
+  },
+  otpLogin: async (contact: string, otp: string) => {
+    const res = await api.post<{ token?: string; user: AuthUser }>('/api/auth/otp', { contact, phone: contact, otp })
     if (res.token) setTabToken('passenger', res.token)
     return res
   },
@@ -169,6 +172,11 @@ export const authApi = {
     } finally {
       setTabToken('passenger', null)
     }
+  },
+  deleteAccount: async () => {
+    const res = await api.delete<{ ok: boolean }>('/api/auth/account')
+    setTabToken('passenger', null)
+    return res
   },
   user: async () => {
     const res = await api.get<{ token?: string; user: AuthUser | null }>('/api/auth/user')
@@ -189,12 +197,15 @@ export const homeApi = {
 }
 
 export const uploadApi = {
-  upload: async (file: File) => {
+  upload: async (file: File, purpose: 'ktp' | 'general' = 'general') => {
     const fd = new FormData()
     fd.append('file', file)
+    fd.append('purpose', purpose)
     const xsrf = getCookie('XSRF-TOKEN')
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (xsrf) headers['X-XSRF-TOKEN'] = xsrf
+    const tabToken = getTabToken('passenger') || getTabToken('staff')
+    if (tabToken) headers['X-Tab-Token'] = tabToken
 
     const res = await fetch('/api/upload', {
       method: 'POST',
@@ -229,7 +240,9 @@ export const reportApi = {
   claim: (kode: string, data: { candidates: string[]; answers: Record<string, string>; nik?: string; ktp_url?: string }) =>
     api.post<{ report: Report }>(`/api/reports/${kode}/claim`, data),
   bast: (kode: string, data: Record<string, unknown>) =>
-    api.post<{ bast: string; qr: string; report: Report }>(`/api/reports/${kode}/bast`, data),
+    api.post<{ bast: string; qr: string; payment_url?: string | null; snap_token?: string | null; report: Report }>(`/api/reports/${kode}/bast`, data),
+  notifications: () =>
+    api.get<Array<{ id: number; report_id: string; title: string; body: string; t: string; unread: boolean }>>('/api/notifications'),
 }
 
 export type StaffUser = {

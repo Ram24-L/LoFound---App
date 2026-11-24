@@ -321,7 +321,12 @@ export function ShippingScreen({ id }: { id: string }) {
         pay_method: pay,
       })
       updateReport(id, res.report)
-      setPhase('paid')
+      if (res.payment_url) {
+        window.open(res.payment_url, '_blank', 'noopener,noreferrer')
+        setPhase('pending')
+      } else {
+        setPhase('paid')
+      }
     } catch (err: any) {
       setPhase('form')
       setPayErr(err.message || 'Pembayaran belum berhasil. Coba lagi atau ganti metode.')
@@ -473,7 +478,7 @@ export function ShippingScreen({ id }: { id: string }) {
         </section>
         <section className="rounded-[20px] border border-line bg-white p-4">
           <h2 className="mb-3 text-[15px] font-bold text-ink">Jasa Kurir</h2>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 lf-noscroll" role="radiogroup" aria-label="Jasa kurir">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Jasa kurir">
             {COURIERS.map((co) => (
               <Pill key={co.k} active={courier === co.k} onClick={() => (setCourier(co.k), setErrors((e) => ({ ...e, courier: '' })))} icon={Package}>
                 {co.k} • {rupiah(co.price)}

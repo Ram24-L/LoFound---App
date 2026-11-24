@@ -751,8 +751,13 @@ export function ClaimsPage() {
                     <Checkbox checked={sel.includes(c.no)} onChange={(v) => setSel((s) => (v ? [...s, c.no] : s.filter((x) => x !== c.no)))} />
                   </td>
                   <td className={td + ' font-mono font-bold'}>
-                    {c.no}
-                    {c.priority && <Flag className="ml-1.5 inline size-3.5 text-coral" aria-label="Prioritas" />}
+                    <div>
+                      {c.no}
+                      {c.priority && <Flag className="ml-1.5 inline size-3.5 text-coral" aria-label="Prioritas" />}
+                    </div>
+                    <Badge tone={c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'neutral' : 'success'} className="mt-1">
+                      {c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'Laporan Awal (Belum Klaim)' : 'Klaim + KTP'}
+                    </Badge>
                   </td>
                   <td className={td}>{c.reporter}</td>
                   <td className={td}>
@@ -822,6 +827,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
   const [infoMsg, setInfoMsg] = useState('Mohon unggah foto label nomor seri atau bukti kepemilikan lainnya.')
   const [busy, setBusy] = useState(false)
   const enough = checks.length >= 2
+  const isStage1Only = claim.isClaimSubmitted === false || (claim.id !== undefined && claim.id < 0)
 
   const handleApprove = async () => {
     setBusy(true)
@@ -882,7 +888,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
       footer={
         mode === 'main' ? (
           <>
-            {!enough && (
+            {!enough && !isStage1Only && (
               <p className="mr-auto flex items-center gap-1.5 text-[13px] font-semibold text-warn">
                 <AlertCircle className="size-4" aria-hidden /> Minimal 2 poin kecocokan diperlukan untuk menyetujui.
               </p>
@@ -893,7 +899,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
             <Button variant="outline" icon={MessageSquare} onClick={() => setMode('info')}>
               Minta Info Tambahan
             </Button>
-            <Button variant="success" icon={CheckCircle2} disabled={!enough} onClick={() => setMode('approve')}>
+            <Button variant="success" icon={CheckCircle2} disabled={!enough || isStage1Only} onClick={() => setMode('approve')}>
               Setujui & Terbitkan BAST QR
             </Button>
           </>
@@ -905,7 +911,13 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
       }
     >
       {mode === 'main' && (
-        <div className="grid grid-cols-[1fr_260px_1fr] gap-4">
+        <>
+          {isStage1Only && (
+            <Banner tone="warn" icon={Lock} className="mb-4">
+              Tahap 1 (Laporan Awal): Penumpang belum mengajukan klaim resmi (KTP &amp; verifikasi buta belum diunggah). Tautkan barang temuan lewat menu Inventaris → Cocokkan Manual agar penumpang melengkapi KTP &amp; bukti terlebih dahulu.
+            </Banner>
+          )}
+          <div className="grid grid-cols-[1fr_260px_1fr] gap-4">
           <section className="rounded-2xl border-2 border-primary bg-white p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
               <UserCheck className="size-4 text-primary" aria-hidden /> Detail Klaim, Dokumen & Jawaban Penumpang
@@ -947,7 +959,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
                     <Badge tone={claim.ktpPhoto ? 'success' : 'neutral'}>{claim.ktpPhoto ? 'Terunggah' : 'Belum Ada'}</Badge>
                   </div>
                   {claim.ktpPhoto ? (
-                    claim.ktpPhoto.startsWith('/storage/') || claim.ktpPhoto.startsWith('http') ? (
+                    claim.ktpPhoto.startsWith('/storage/') || claim.ktpPhoto.startsWith('/api/private-files/') || claim.ktpPhoto.startsWith('http') ? (
                       <a href={claim.ktpPhoto} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-line">
                         <img src={claim.ktpPhoto} alt="KTP Penumpang" className="h-24 w-full object-cover hover:opacity-90" />
                       </a>
@@ -1018,7 +1030,8 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
           </section>
 
           <WarehouseCard item={item} />
-        </div>
+          </div>
+        </>
       )}
 
       {mode === 'approve' && (

@@ -221,6 +221,8 @@ export type Claim = {
   status?: string
   answer?: string
   note?: string
+  isClaimSubmitted?: boolean
+  reportStatus?: string
 }
 export const CLAIMS: Claim[] = [
   { no: 'KLM-2026-118', reporter: 'M. R****** M******', item: 'Laptop silver', itemCode: 'FND-0412', submitted: '14:02', slaMin: 95, tab: 'baru', dispute: true },
