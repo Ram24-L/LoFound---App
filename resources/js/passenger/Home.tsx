@@ -47,7 +47,7 @@ export function HomeScreen() {
           <div className="relative flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <Logo light size="sm" />
-              <p className="mt-3 text-[22px] font-bold leading-7">{user ? `Halo, ${user.name}!` : 'Halo, Tamu'}</p>
+              <h1 className="mt-3 text-[22px] font-bold leading-7">{user ? `Halo, ${user.name}!` : 'Halo, Tamu'}</h1>
               <p className="text-[13px] text-white/85">{user ? 'Semoga perjalanan Anda lancar hari ini.' : 'Lihat transparansi layanan atau buat laporan tanpa antre.'}</p>
             </div>
             {user ? (

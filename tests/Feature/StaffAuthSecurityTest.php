@@ -85,4 +85,47 @@ class StaffAuthSecurityTest extends TestCase
             'password' => 'SecretPass#99',
         ])->assertStatus(403);
     }
+
+    public function test_unauthenticated_upload_is_rejected(): void
+    {
+        $this->postJson('/api/upload', [])->assertStatus(401);
+    }
+
+    public function test_tab_token_is_revoked_on_logout_and_rejects_inactive_user(): void
+    {
+        $stasiun = Stasiun::first() ?? Stasiun::create(['kode' => 'JAKK', 'nama' => 'Jakarta Kota', 'lin' => 'Lin Bogor']);
+
+        $staff = User::create([
+            'name'       => 'Token Staff',
+            'email'      => 'token.cs@kci.id',
+            'password'   => Hash::make('SecretStaff#99'),
+            'role'       => 'cs',
+            'stasiun_id' => $stasiun->id,
+            'active'     => true,
+        ]);
+
+        $login = $this->postJson('/api/staff/auth/login', [
+            'email'    => 'token.cs@kci.id',
+            'password' => 'SecretStaff#99',
+        ])->assertStatus(200);
+
+        $token = $login->json('token');
+        $this->assertNotEmpty($token);
+
+        // Valid token works
+        $this->withHeader('X-Tab-Token', $token)
+            ->getJson('/api/staff/auth/user')
+            ->assertStatus(200)
+            ->assertJsonPath('user.email', 'token.cs@kci.id');
+
+        // Logout revokes token
+        $this->withHeader('X-Tab-Token', $token)
+            ->postJson('/api/staff/auth/logout')
+            ->assertStatus(200);
+
+        $this->withHeader('X-Tab-Token', $token)
+            ->getJson('/api/staff/auth/user')
+            ->assertStatus(200)
+            ->assertJsonPath('user', null);
+    }
 }

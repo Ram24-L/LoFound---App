@@ -20,8 +20,8 @@ class StaffRole
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        // Debug / superuser account has full access to all staff endpoints
-        if ($user->role === 'debug') {
+        // Debug / superuser account has full access only in local/testing environments
+        if ($user->role === 'debug' && app()->environment('local', 'testing')) {
             return $next($request);
         }
 

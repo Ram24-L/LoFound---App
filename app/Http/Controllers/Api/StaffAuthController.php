@@ -74,7 +74,9 @@ class StaffAuthController extends Controller
         if ($user) {
             AuditLog::record($user->id, $user->name, 'Logout', 'Konsol Petugas');
         }
-        if (! $request->hasHeader('X-Tab-Token')) {
+        if ($request->hasHeader('X-Tab-Token')) {
+            ResolveTabToken::revokeToken($request->header('X-Tab-Token'));
+        } else {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

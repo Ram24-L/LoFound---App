@@ -18,7 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
             \App\Http\Middleware\ResolveTabToken::class,
+        ]);
+        $middleware->validateCsrfTokens(except: [
+            'api/webhooks/*',
         ]);
         $middleware->alias([
             'staff.role' => \App\Http\Middleware\StaffRole::class,
