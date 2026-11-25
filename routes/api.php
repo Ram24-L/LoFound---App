@@ -32,7 +32,6 @@ Route::post('/upload', [UploadController::class, 'upload']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
-Route::post('/auth/otp', [AuthController::class, 'otpLogin']);
 Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth');
 Route::get('/auth/user', [AuthController::class, 'user']);
 

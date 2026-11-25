@@ -128,56 +128,58 @@ export function ShippingQueuePage() {
         {list.length === 0 ? (
           <EmptyState icon={Truck} title="Tidak ada pengiriman pada status ini." />
         ) : (
-          <table className="w-full">
-            <thead className="bg-[#f6fafc]">
-              <tr>
-                {['No. Laporan', 'Penerima', 'Kurir', 'Tujuan', 'Dibayar', 'Status', 'Aksi'].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((r) => (
-                <tr key={r.no} className="border-t border-line hover:bg-tint/40">
-                  <td className={td + ' font-mono font-bold'}>{r.no}</td>
-                  <td className={td}>{r.recipient}</td>
-                  <td className={td}>{r.courier}</td>
-                  <td className={td}>{r.dest}</td>
-                  <td className={td + ' text-muted'}>{r.paid}</td>
-                  <td className={td}>
-                    <Badge tone={r.status === 'Menunggu Resi' ? 'warn' : r.status === 'Dikemas' ? 'info' : 'success'}>
-                      {r.status === 'Selesai' ? 'Tiba di Tujuan' : r.status}
-                    </Badge>
-                    {r.awb && <span className="ml-2 font-mono text-xs text-muted">{r.awb}</span>}
-                  </td>
-                  <td className={td}>
-                    {r.status === 'Menunggu Resi' ? (
-                      <Button size="sm" onClick={() => setOpen(r)}>
-                        Buat Resi
-                      </Button>
-                    ) : r.status === 'Dikemas' ? (
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="primary" onClick={() => handleMarkShipped(r)}>
-                          Tandai Dikirim
-                        </Button>
-                        <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
-                          Simulasi Tiba
-                        </Button>
-                      </div>
-                    ) : r.status === 'Dikirim' ? (
-                      <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
-                        Simulasi Pesanan Tiba (Selesai)
-                      </Button>
-                    ) : (
-                      <Badge tone="success">Selesai Diterima</Badge>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f6fafc]">
+                <tr>
+                  {['No. Laporan', 'Penerima', 'Kurir', 'Tujuan', 'Dibayar', 'Status', 'Aksi'].map((h) => (
+                    <th key={h} className={th}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {list.map((r) => (
+                  <tr key={r.no} className="border-t border-line hover:bg-tint/40">
+                    <td className={td + ' whitespace-nowrap font-mono font-bold'}>{r.no}</td>
+                    <td className={td}>{r.recipient}</td>
+                    <td className={td}>{r.courier}</td>
+                    <td className={td}>{r.dest}</td>
+                    <td className={td + ' whitespace-nowrap text-muted'}>{r.paid}</td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <Badge tone={r.status === 'Menunggu Resi' ? 'warn' : r.status === 'Dikemas' ? 'info' : 'success'}>
+                        {r.status === 'Selesai' ? 'Tiba di Tujuan' : r.status}
+                      </Badge>
+                      {r.awb && <span className="ml-2 font-mono text-xs text-muted">{r.awb}</span>}
+                    </td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      {r.status === 'Menunggu Resi' ? (
+                        <Button size="sm" onClick={() => setOpen(r)}>
+                          Buat Resi
+                        </Button>
+                      ) : r.status === 'Dikemas' ? (
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="primary" onClick={() => handleMarkShipped(r)}>
+                            Tandai Dikirim
+                          </Button>
+                          <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
+                            Simulasi Tiba
+                          </Button>
+                        </div>
+                      ) : r.status === 'Dikirim' ? (
+                        <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
+                          Simulasi Pesanan Tiba (Selesai)
+                        </Button>
+                      ) : (
+                        <Badge tone="success">Selesai Diterima</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
 

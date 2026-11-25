@@ -146,52 +146,6 @@ class AuthController
         return response()->json($otpService->send($contact));
     }
 
-    public function otpLogin(Request $request, OtpService $otpService): JsonResponse
-    {
-        $request->validate([
-            'contact' => 'nullable|string',
-            'phone'   => 'nullable|string',
-            'otp'     => 'required|string|size:6',
-        ]);
-
-        $contact = trim((string) ($request->input('contact') ?: $request->input('phone')));
-        if (! $contact) {
-            throw ValidationException::withMessages([
-                'contact' => ['Email atau nomor WhatsApp wajib diisi.'],
-            ]);
-        }
-
-        $otp = (string) $request->input('otp');
-
-        if (! $otpService->verify($contact, $otp)) {
-            throw ValidationException::withMessages([
-                'otp' => ['Kode OTP tidak valid atau sudah kedaluwarsa.'],
-            ]);
-        }
-
-        $isEmail = (bool) filter_var($contact, FILTER_VALIDATE_EMAIL);
-        $field = $isEmail ? 'email' : 'phone';
-        $user = User::where($field, $contact)->first();
-
-        if (! $user) {
-            $cleanPhone = preg_replace('/\D+/', '', $contact) ?: Str::random(8);
-            $user = User::create([
-                'name'     => $isEmail ? ucfirst(explode('@', $contact)[0]) : ('Penumpang ' . substr($cleanPhone, -4)),
-                'email'    => $isEmail ? $contact : "{$cleanPhone}@wa.lofound.local",
-                'phone'    => $isEmail ? null : $contact,
-                'password' => Hash::make(Str::random(24)),
-                'role'     => 'penumpang',
-            ]);
-        }
-
-        Auth::login($user, true);
-
-        return response()->json([
-            'token' => ResolveTabToken::createToken($user),
-            'user'  => $this->mapUser($user),
-        ]);
-    }
-
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user();

@@ -85,52 +85,54 @@ export function InventoryPage() {
         {list.length === 0 ? (
           <EmptyState icon={ScanLine} title="Belum ada barang temuan." body="Catat barang yang diserahkan petugas kereta atau penumpang lain." action={<Button variant="cta" size="sm" icon={Plus} onClick={() => setDrawer(true)}>Catat Barang Temuan Baru</Button>} />
         ) : (
-          <table className="w-full">
-            <thead className="bg-[#f6fafc]">
-              <tr>
-                {['Kode Barang', 'Kategori', 'Deskripsi Publik', 'Stasiun', 'Tanggal Temu', 'Status', 'Aksi'].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((i) => {
-                const I = statusIcon[i.status]
-                return (
-                  <tr key={i.code} className="border-t border-line hover:bg-tint/40">
-                    <td className={td + ' font-mono font-bold'}>{i.code}</td>
-                    <td className={td}>
-                      <span className="flex items-center gap-2">
-                        <CategoryBadge category={i.cat} size={30} /> {i.cat}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      {i.name}
-                      {i.status === 'Tersimpan' && i.expiresIn <= 3 && (
-                        <Badge tone="warn" icon={AlertTriangle} className="ml-2 bg-[#fff1e6] text-[#c2410c]">
-                          Kedaluwarsa dalam {i.expiresIn} hari
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f6fafc]">
+                <tr>
+                  {['Kode Barang', 'Kategori', 'Deskripsi Publik', 'Stasiun', 'Tanggal Temu', 'Status', 'Aksi'].map((h) => (
+                    <th key={h} className={th}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((i) => {
+                  const I = statusIcon[i.status]
+                  return (
+                    <tr key={i.code} className="border-t border-line hover:bg-tint/40">
+                      <td className={td + ' whitespace-nowrap font-mono font-bold'}>{i.code}</td>
+                      <td className={td + ' whitespace-nowrap'}>
+                        <span className="flex items-center gap-2">
+                          <CategoryBadge category={i.cat} size={30} /> {i.cat}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        {i.name}
+                        {i.status === 'Tersimpan' && i.expiresIn <= 3 && (
+                          <Badge tone="warn" icon={AlertTriangle} className="ml-2 bg-[#fff1e6] text-[#c2410c]">
+                            Kedaluwarsa dalam {i.expiresIn} hari
+                          </Badge>
+                        )}
+                      </td>
+                      <td className={td + ' whitespace-nowrap'}>St. {i.station}</td>
+                      <td className={td + ' whitespace-nowrap text-muted'}>{i.found}</td>
+                      <td className={td + ' whitespace-nowrap'}>
+                        <Badge tone={statusTone[i.status]} icon={I}>
+                          {i.status}
                         </Badge>
-                      )}
-                    </td>
-                    <td className={td}>St. {i.station}</td>
-                    <td className={td + ' text-muted'}>{i.found}</td>
-                    <td className={td}>
-                      <Badge tone={statusTone[i.status]} icon={I}>
-                        {i.status}
-                      </Badge>
-                    </td>
-                    <td className={td}>
-                      <Button variant="ghost" size="sm" onClick={() => nav('item', { code: i.code })}>
-                        Lihat Detail
-                      </Button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className={td + ' whitespace-nowrap'}>
+                        <Button variant="ghost" size="sm" onClick={() => nav('item', { code: i.code })}>
+                          Lihat Detail
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
       <ItemDrawer open={drawer} onClose={() => setDrawer(false)} />
@@ -741,67 +743,69 @@ export function ClaimsPage() {
         {list.length === 0 ? (
           <EmptyState icon={CheckCircle2} title="Tidak ada klaim pada tab ini." />
         ) : (
-          <table className="w-full">
-            <thead className="bg-[#f6fafc]">
-              <tr>
-                <th className={th + ' w-12'}>
-                  <span className="sr-only">Pilih</span>
-                </th>
-                {['No. Klaim', 'Pelapor', 'Kategori', 'Barang', 'Diajukan', 'Sisa SLA', 'Ditangani Oleh', 'Aksi'].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f6fafc]">
+                <tr>
+                  <th className={th + ' w-10'}>
+                    <span className="sr-only">Pilih</span>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => (
-                <tr key={c.no} className="border-t border-line hover:bg-tint/40">
-                  <td className="px-4">
-                    <Checkbox checked={sel.includes(c.no)} onChange={(v) => setSel((s) => (v ? [...s, c.no] : s.filter((x) => x !== c.no)))} />
-                  </td>
-                  <td className={td + ' font-mono font-bold'}>
-                    <div>
-                      {c.no}
-                      {c.priority && <Flag className="ml-1.5 inline size-3.5 text-coral" aria-label="Prioritas" />}
-                    </div>
-                    <Badge tone={c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'neutral' : 'success'} className="mt-1">
-                      {c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'Laporan Awal (Belum Klaim)' : 'Klaim + KTP'}
-                    </Badge>
-                  </td>
-                  <td className={td}>{c.reporter}</td>
-                  <td className={td}>
-                    <div className="flex items-center gap-2">
-                      <CategoryBadge category={c.category || 'Elektronik'} size={28} />
-                      <Badge tone={c.category === 'Uang Tunai' ? 'warn' : c.category === 'Non Elektronik' ? 'neutral' : 'info'}>
-                        {c.category || 'Elektronik'}
-                      </Badge>
-                    </div>
-                  </td>
-                  <td className={td}>
-                    {c.item} <span className="text-muted">• {c.itemCode}</span>
-                  </td>
-                  <td className={td + ' text-muted'}>{c.submitted}</td>
-                  <td className={td}>{c.tab === 'selesai' ? <Badge tone="neutral">Selesai</Badge> : <SlaBadge min={c.slaMin} />}</td>
-                  <td className={td}>{c.handler ?? <span className="text-soft">—</span>}</td>
-                  <td className={td}>
-                    <Button
-                      size="sm"
-                      variant={c.tab === 'selesai' ? 'ghost' : 'primary'}
-                      onClick={() => {
-                        if (c.tab === 'baru') {
-                          setClaims((cs) => cs.map((x) => (x.no === c.no ? { ...x, tab: 'ditinjau', handler: 'Anda' } : x)))
-                        }
-                        setOpen(c)
-                      }}
-                    >
-                      Lihat Detail Klaim
-                    </Button>
-                  </td>
+                  {['No. Klaim', 'Pelapor', 'Kategori', 'Barang', 'Diajukan', 'Sisa SLA', 'Ditangani Oleh', 'Aksi'].map((h) => (
+                    <th key={h} className={th}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {list.map((c) => (
+                  <tr key={c.no} className="border-t border-line hover:bg-tint/40">
+                    <td className="px-3">
+                      <Checkbox checked={sel.includes(c.no)} onChange={(v) => setSel((s) => (v ? [...s, c.no] : s.filter((x) => x !== c.no)))} />
+                    </td>
+                    <td className={td + ' whitespace-nowrap font-mono font-bold'}>
+                      <div>
+                        {c.no}
+                        {c.priority && <Flag className="ml-1.5 inline size-3.5 text-coral" aria-label="Prioritas" />}
+                      </div>
+                      <Badge tone={c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'neutral' : 'success'} className="mt-1">
+                        {c.isClaimSubmitted === false || (c.id !== undefined && c.id < 0) ? 'Laporan Awal (Belum Klaim)' : 'Klaim + KTP'}
+                      </Badge>
+                    </td>
+                    <td className={td}>{c.reporter}</td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <div className="flex items-center gap-2">
+                        <CategoryBadge category={c.category || 'Elektronik'} size={28} />
+                        <Badge tone={c.category === 'Uang Tunai' ? 'warn' : c.category === 'Non Elektronik' ? 'neutral' : 'info'}>
+                          {c.category || 'Elektronik'}
+                        </Badge>
+                      </div>
+                    </td>
+                    <td className={td}>
+                      {c.item} <span className="text-muted">• {c.itemCode}</span>
+                    </td>
+                    <td className={td + ' whitespace-nowrap text-muted'}>{c.submitted}</td>
+                    <td className={td + ' whitespace-nowrap'}>{c.tab === 'selesai' ? <Badge tone="neutral">Selesai</Badge> : <SlaBadge min={c.slaMin} />}</td>
+                    <td className={td + ' whitespace-nowrap'}>{c.handler ?? <span className="text-soft">—</span>}</td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <Button
+                        size="sm"
+                        variant={c.tab === 'selesai' ? 'ghost' : 'primary'}
+                        onClick={() => {
+                          if (c.tab === 'baru') {
+                            setClaims((cs) => cs.map((x) => (x.no === c.no ? { ...x, tab: 'ditinjau', handler: 'Anda' } : x)))
+                          }
+                          setOpen(c)
+                        }}
+                      >
+                        Detail Klaim
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
       {open && <VerifyModal claim={open} onClose={() => setOpen(null)} />}
@@ -927,7 +931,7 @@ function VerifyModal({ claim, onClose }: { claim: Claim; onClose: () => void }) 
               Tahap 1 (Laporan Awal): Penumpang belum mengajukan klaim resmi (KTP &amp; verifikasi buta belum diunggah). Tautkan barang temuan lewat menu Inventaris → Cocokkan Manual agar penumpang melengkapi KTP &amp; bukti terlebih dahulu.
             </Banner>
           )}
-          <div className="grid grid-cols-[1fr_260px_1fr] gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_240px_1fr]">
           <section className="min-w-0 rounded-2xl border-2 border-primary bg-white p-4">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
               <UserCheck className="size-4 shrink-0 text-primary" aria-hidden /> Detail Klaim, Dokumen & Jawaban Penumpang

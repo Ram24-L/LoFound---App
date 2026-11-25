@@ -406,137 +406,141 @@ export function MasterDataPage() {
 
       {tab === 'st' && (
         <Panel>
-          <table className="w-full">
-            <thead className="bg-[#f6fafc]">
-              <tr>
-                {['Kode', 'Nama Stasiun', 'Lin KRL', 'Jam Layanan', 'Tampil (Aktif)', 'Status', 'Aksi'].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {stations.map((s) => (
-                <tr key={s.code} className={cx('border-t border-line', !s.active && 'bg-[#f7f9fa] text-muted')}>
-                  <td className={td + ' font-mono font-bold'}>{s.code}</td>
-                  <td className={td + ' font-bold'}>St. {s.name}</td>
-                  <td className={td}><Badge tone="neutral">{s.line}</Badge></td>
-                  <td className={td + ' text-muted'}>{s.hours}</td>
-                  <td className={td}>
-                    <MiniSwitch
-                      checked={!!s.active}
-                      label={`Tampilkan Stasiun ${s.name}`}
-                      onChange={(v) =>
-                        openConfirm({
-                          title: v ? `Aktifkan St. ${s.name}?` : `Sembunyikan St. ${s.name}?`,
-                          body: v
-                            ? `Apakah Anda yakin ingin menampilkan kembali St. ${s.name} di daftar pilihan stasiun penumpang?`
-                            : `Apakah Anda yakin ingin menyembunyikan St. ${s.name} dari daftar stasiun penumpang?`,
-                          tone: v ? 'info' : 'warn',
-                          confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Sembunyikan',
-                          onConfirm: () => handleToggleStation(s, v),
-                        })
-                      }
-                    />
-                  </td>
-                  <td className={td}>
-                    <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'Aktif' : 'Disembunyikan'}</Badge>
-                  </td>
-                  <td className={td}>
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        icon={Pencil}
-                        onClick={() => {
-                          setStForm({
-                            id: s.id,
-                            code: s.code,
-                            name: s.name,
-                            line: s.line,
-                            hours: s.hours || '04:00–24:00',
-                            active: !!s.active,
-                          })
-                          setStErr('')
-                          setStModal('edit')
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={Trash2}
-                        className="text-danger hover:bg-danger-soft"
-                        onClick={() =>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f6fafc]">
+                <tr>
+                  {['Kode', 'Nama Stasiun', 'Lin KRL', 'Jam Layanan', 'Tampil (Aktif)', 'Status', 'Aksi'].map((h) => (
+                    <th key={h} className={th}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {stations.map((s) => (
+                  <tr key={s.code} className={cx('border-t border-line', !s.active && 'bg-[#f7f9fa] text-muted')}>
+                    <td className={td + ' whitespace-nowrap font-mono font-bold'}>{s.code}</td>
+                    <td className={td + ' font-bold'}>St. {s.name}</td>
+                    <td className={td + ' whitespace-nowrap'}><Badge tone="neutral">{s.line}</Badge></td>
+                    <td className={td + ' whitespace-nowrap text-muted'}>{s.hours}</td>
+                    <td className={td}>
+                      <MiniSwitch
+                        checked={!!s.active}
+                        label={`Tampilkan Stasiun ${s.name}`}
+                        onChange={(v) =>
                           openConfirm({
-                            title: `Hapus Stasiun St. ${s.name}?`,
-                            body: `Apakah Anda yakin ingin menghapus St. ${s.name} (${s.code})? Jika stasiun sudah dipakai di laporan, statusnya akan otomatis disembunyikan.`,
-                            tone: 'danger',
-                            confirmLabel: 'Ya, Hapus',
-                            onConfirm: () => handleDeleteStation(s),
+                            title: v ? `Aktifkan St. ${s.name}?` : `Sembunyikan St. ${s.name}?`,
+                            body: v
+                              ? `Apakah Anda yakin ingin menampilkan kembali St. ${s.name} di daftar pilihan stasiun penumpang?`
+                              : `Apakah Anda yakin ingin menyembunyikan St. ${s.name} dari daftar stasiun penumpang?`,
+                            tone: v ? 'info' : 'warn',
+                            confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Sembunyikan',
+                            onConfirm: () => handleToggleStation(s, v),
                           })
                         }
-                      >
-                        Hapus
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      />
+                    </td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'Aktif' : 'Disembunyikan'}</Badge>
+                    </td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={Pencil}
+                          onClick={() => {
+                            setStForm({
+                              id: s.id,
+                              code: s.code,
+                              name: s.name,
+                              line: s.line,
+                              hours: s.hours || '04:00–24:00',
+                              active: !!s.active,
+                            })
+                            setStErr('')
+                            setStModal('edit')
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={Trash2}
+                          className="text-danger hover:bg-danger-soft"
+                          onClick={() =>
+                            openConfirm({
+                              title: `Hapus Stasiun St. ${s.name}?`,
+                              body: `Apakah Anda yakin ingin menghapus St. ${s.name} (${s.code})? Jika stasiun sudah dipakai di laporan, statusnya akan otomatis disembunyikan.`,
+                              tone: 'danger',
+                              confirmLabel: 'Ya, Hapus',
+                              onConfirm: () => handleDeleteStation(s),
+                            })
+                          }
+                        >
+                          Hapus
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Panel>
       )}
 
       {tab === 'user' && (
         <Panel>
-          <table className="w-full">
-            <thead className="bg-[#f6fafc]">
-              <tr>
-                {['Nama Staf', 'Email Kedinasan', 'Peran / Divisi', 'Stasiun Posko', 'Aktif', 'Status'].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.email} className={cx('border-t border-line', !u.active && 'bg-[#f7f9fa] text-muted')}>
-                  <td className={td + ' font-bold'}>{u.name}</td>
-                  <td className={td + ' font-mono text-muted'}>{u.email}</td>
-                  <td className={td}>
-                    <Badge tone={u.role.includes('CS') ? 'info' : u.role.includes('Logistik') ? 'warn' : 'neutral'}>
-                      {u.role}
-                    </Badge>
-                  </td>
-                  <td className={td}>{u.station && u.station !== 'Pusat' ? `St. ${u.station}` : 'Pusat'}</td>
-                  <td className={td}>
-                    <MiniSwitch
-                      checked={u.active !== false}
-                      label={`Aktifkan staf ${u.name}`}
-                      onChange={(v) =>
-                        openConfirm({
-                          title: v ? `Aktifkan Akun ${u.name}?` : `Nonaktifkan Akun ${u.name}?`,
-                          body: v
-                            ? `Apakah Anda yakin ingin mengaktifkan kembali akun petugas ${u.name} (${u.email})?`
-                            : `Apakah Anda yakin ingin menonaktifkan akun petugas ${u.name}? Petugas tidak akan bisa login ke Konsol Petugas.`,
-                          tone: v ? 'info' : 'warn',
-                          confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan',
-                          onConfirm: () => handleToggleUser(u, v),
-                        })
-                      }
-                    />
-                  </td>
-                  <td className={td}>
-                    <Badge tone={u.active !== false ? 'success' : 'neutral'}>{u.active !== false ? 'Aktif' : 'Non-aktif'}</Badge>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f6fafc]">
+                <tr>
+                  {['Nama Staf', 'Email Kedinasan', 'Peran / Divisi', 'Stasiun Posko', 'Aktif', 'Status'].map((h) => (
+                    <th key={h} className={th}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.email} className={cx('border-t border-line', !u.active && 'bg-[#f7f9fa] text-muted')}>
+                    <td className={td + ' font-bold'}>{u.name}</td>
+                    <td className={td + ' whitespace-nowrap font-mono text-muted'}>{u.email}</td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <Badge tone={u.role.includes('CS') ? 'info' : u.role.includes('Logistik') ? 'warn' : 'neutral'}>
+                        {u.role}
+                      </Badge>
+                    </td>
+                    <td className={td + ' whitespace-nowrap'}>{u.station && u.station !== 'Pusat' ? `St. ${u.station}` : 'Pusat'}</td>
+                    <td className={td}>
+                      <MiniSwitch
+                        checked={u.active !== false}
+                        label={`Aktifkan staf ${u.name}`}
+                        onChange={(v) =>
+                          openConfirm({
+                            title: v ? `Aktifkan Akun ${u.name}?` : `Nonaktifkan Akun ${u.name}?`,
+                            body: v
+                              ? `Apakah Anda yakin ingin mengaktifkan kembali akun petugas ${u.name} (${u.email})?`
+                              : `Apakah Anda yakin ingin menonaktifkan akun petugas ${u.name}? Petugas tidak akan bisa login ke Konsol Petugas.`,
+                            tone: v ? 'info' : 'warn',
+                            confirmLabel: v ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan',
+                            onConfirm: () => handleToggleUser(u, v),
+                          })
+                        }
+                      />
+                    </td>
+                    <td className={td + ' whitespace-nowrap'}>
+                      <Badge tone={u.active !== false ? 'success' : 'neutral'}>{u.active !== false ? 'Aktif' : 'Non-aktif'}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Panel>
       )}
 
@@ -767,30 +771,32 @@ export function AuditTable({ pageSize = 6 }: { pageSize?: number }) {
       {rows.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted">Tidak ada data pada periode ini.</p>
       ) : (
-        <table className="w-full">
-          <thead className="bg-[#f6fafc]">
-            <tr>
-              {['Waktu', 'Pelaku', 'Aksi', 'Objek', 'Hasil'].map((h) => (
-                <th key={h} className={th}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((a, i) => (
-              <tr key={i} className="border-t border-line">
-                <td className={td + ' whitespace-nowrap text-muted'}>{a.t}</td>
-                <td className={td + ' font-semibold'}>{a.who}</td>
-                <td className={td}>{a.act}</td>
-                <td className={td + ' font-mono text-xs'}>{a.obj}</td>
-                <td className={td}>
-                  <Badge tone={a.res === 'Berhasil' ? 'success' : a.res.startsWith('Ditolak') || a.res.startsWith('Dikunci') ? 'danger' : 'warn'}>{a.res}</Badge>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[#f6fafc]">
+              <tr>
+                {['Waktu', 'Pelaku', 'Aksi', 'Objek', 'Hasil'].map((h) => (
+                  <th key={h} className={th}>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((a, i) => (
+                <tr key={i} className="border-t border-line">
+                  <td className={td + ' whitespace-nowrap text-muted'}>{a.t}</td>
+                  <td className={td + ' font-semibold'}>{a.who}</td>
+                  <td className={td}>{a.act}</td>
+                  <td className={td + ' font-mono text-xs'}>{a.obj}</td>
+                  <td className={td + ' whitespace-nowrap'}>
+                    <Badge tone={a.res === 'Berhasil' ? 'success' : a.res.startsWith('Ditolak') || a.res.startsWith('Dikunci') ? 'danger' : 'warn'}>{a.res}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-muted">
         <span>

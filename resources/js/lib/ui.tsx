@@ -66,7 +66,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cx(
-        'inline-flex items-center justify-center gap-2 transition-colors select-none min-w-11',
+        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap transition-colors select-none min-w-11',
         sizes[size],
         btnStyles[variant],
         full && 'w-full',
@@ -74,7 +74,7 @@ export function Button({
         className,
       )}
     >
-      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : Icon ? <Icon className="size-[18px]" aria-hidden /> : null}
+      {loading ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden /> : Icon ? <Icon className="size-[18px] shrink-0" aria-hidden /> : null}
       {children}
     </button>
   )

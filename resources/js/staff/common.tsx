@@ -110,8 +110,8 @@ export function Panel({ children, className, title, action }: { children: ReactN
   )
 }
 
-export const th = 'px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wide text-muted'
-export const td = 'px-4 py-3 text-[13px] text-ink'
+export const th = 'whitespace-nowrap px-3.5 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-muted'
+export const td = 'px-3.5 py-3 text-[13px] text-ink'
 
 export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { v: T; l: string }[] }) {
   return (

@@ -774,20 +774,34 @@ class LoFoundCrudRbacTest extends TestCase
         $otherUser = $this->getOrCreatePassenger('other.user@mail.com', 'Penumpang Lain');
         $cs        = $this->getOrCreateStaff('cs', 'rina.k@kci.id', 'Rina Kurniasih');
 
-        // 1. Real OTP send & verify via Cache
-        $otpSend = $this->postJson('/api/auth/otp/send', ['contact' => '081299990001']);
+        // 1. Registration OTP send & verify via Cache (passwordless OTP login removed)
+        $otpSend = $this->postJson('/api/auth/otp/send', [
+            'contact' => '081299990001',
+            'purpose' => 'register',
+        ]);
         $otpSend->assertStatus(200);
         $devOtp = $otpSend->json('dev_otp');
         $this->assertNotEmpty($devOtp);
 
-        // Wrong OTP fails (422)
-        $this->postJson('/api/auth/otp', ['phone' => '081299990001', 'otp' => '000000'])
-            ->assertStatus(422);
+        // Passwordless OTP login endpoint is removed (SPA GET fallback yields 405 for POST, or 404)
+        $removedOtpRes = $this->postJson('/api/auth/otp', ['phone' => '081299990001', 'otp' => $devOtp]);
+        $this->assertTrue(in_array($removedOtpRes->status(), [404, 405], true));
 
-        // Correct OTP succeeds (200)
-        $this->postJson('/api/auth/otp', ['phone' => '081299990001', 'otp' => $devOtp])
-            ->assertStatus(200)
-            ->assertJsonStructure(['token', 'user']);
+        // Wrong OTP fails during registration (422)
+        $this->postJson('/api/auth/register', [
+            'name'     => 'OTP Register User',
+            'contact'  => '081299990001',
+            'password' => 'SecretPass#1',
+            'otp'      => '000000',
+        ])->assertStatus(422);
+
+        // Correct OTP succeeds during registration (201)
+        $this->postJson('/api/auth/register', [
+            'name'     => 'OTP Register User',
+            'contact'  => '081299990001',
+            'password' => 'SecretPass#1',
+            'otp'      => $devOtp,
+        ])->assertStatus(201)->assertJsonStructure(['token', 'user']);
 
         // 2. Payment Webhook signature check & state transition
         $report = LaporanBarangHilang::create([

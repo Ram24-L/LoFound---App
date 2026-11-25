@@ -469,17 +469,17 @@ export function ProfileScreen() {
             <Button
               variant="danger"
               full
-              disabled={confirmText !== 'HAPUS' || deletingAccount}
+              disabled={confirmText.trim() !== 'HAPUS' || deletingAccount}
               onClick={async () => {
                 setDeletingAccount(true)
                 try {
                   await authApi.deleteAccount()
                   setDel(0)
                   setConfirmText('')
-                  toast.show('Akun berhasil dihapus permanen')
                   await logout()
+                  toast('Akun berhasil dihapus permanen.')
                 } catch (err) {
-                  toast.show(err instanceof Error ? err.message : 'Gagal menghapus akun')
+                  toast(err instanceof Error ? err.message : 'Gagal menghapus akun.', { tone: 'danger' })
                 } finally {
                   setDeletingAccount(false)
                 }

@@ -161,11 +161,6 @@ export const authApi = {
   sendOtp: async (contact: string, purpose?: 'login' | 'register') => {
     return api.post<{ sent: boolean; channel?: 'email' | 'whatsapp'; live?: boolean; expires_in: number; dev_otp?: string | null }>('/api/auth/otp/send', { contact, purpose })
   },
-  otpLogin: async (contact: string, otp: string) => {
-    const res = await api.post<{ token?: string; user: AuthUser }>('/api/auth/otp', { contact, phone: contact, otp })
-    if (res.token) setTabToken('passenger', res.token)
-    return res
-  },
   logout: async () => {
     try {
       await api.post('/api/auth/logout')
