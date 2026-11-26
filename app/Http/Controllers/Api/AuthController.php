@@ -57,13 +57,13 @@ class AuthController
             'name'     => 'required|string|max:100',
             'contact'  => 'required|string',
             'password' => 'required|string|min:8',
-            'otp'      => 'nullable|string|size:6',
+            'otp'      => (app()->isProduction() ? 'required' : 'nullable') . '|string|size:6',
         ]);
 
         $contact = $request->input('contact');
         $isEmail = (bool) filter_var($contact, FILTER_VALIDATE_EMAIL);
 
-        if ($request->filled('otp') && ! $otpService->verify($contact, (string) $request->input('otp'))) {
+        if (($request->filled('otp') || app()->isProduction()) && ! $otpService->verify($contact, (string) $request->input('otp'))) {
             throw ValidationException::withMessages([
                 'otp' => ['Kode OTP tidak valid atau sudah kedaluwarsa.'],
             ]);
@@ -96,7 +96,9 @@ class AuthController
 
     public function logout(Request $request): JsonResponse
     {
-        if (! $request->hasHeader('X-Tab-Token')) {
+        if ($request->hasHeader('X-Tab-Token')) {
+            ResolveTabToken::revokeToken($request->header('X-Tab-Token'));
+        } else {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -266,7 +268,9 @@ class AuthController
             Storage::disk('local')->delete($path);
         }
 
-        if (! $request->hasHeader('X-Tab-Token')) {
+        if ($request->hasHeader('X-Tab-Token')) {
+            ResolveTabToken::revokeToken($request->header('X-Tab-Token'));
+        } else {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

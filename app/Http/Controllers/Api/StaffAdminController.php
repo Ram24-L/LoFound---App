@@ -47,6 +47,12 @@ class StaffAdminController extends Controller
      */
     public function updateUser(Request $request, int $id)
     {
+        $request->validate([
+            'active'  => 'sometimes|boolean',
+            'name'    => 'sometimes|string|max:100',
+            'station' => 'nullable|string|max:100',
+        ]);
+
         $user = User::findOrFail($id);
 
         if ($request->has('active')) {
@@ -107,7 +113,7 @@ class StaffAdminController extends Controller
         $user = User::create([
             'name'       => $request->name,
             'email'      => strtolower($request->email),
-            'password'   => Hash::make('lofound2026'),
+            'password'   => Hash::make(\Illuminate\Support\Str::random(16)),
             'role'       => $roleDbMap[$request->role] ?? 'cs',
             'stasiun_id' => $stasiun?->id,
         ]);

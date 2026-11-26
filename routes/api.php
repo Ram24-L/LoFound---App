@@ -26,12 +26,11 @@ Route::get('/home-stats', [HomeController::class, 'stats']);
 Route::get('/home-feed', [HomeController::class, 'feed']);
 Route::get('/stations', fn () => Stasiun::where('active', true)->orderBy('nama')->get(['id', 'kode', 'nama', 'lin', 'jam_layanan', 'active']));
 Route::get('/categories', fn () => KategoriBarang::where('active', true)->get(['id', 'nama', 'ikon', 'shippable']));
-Route::post('/upload', [UploadController::class, 'upload']);
 
-// Auth
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
+// Auth (rate limited)
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
+Route::post('/auth/otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:10,1');
 Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth');
 Route::get('/auth/user', [AuthController::class, 'user']);
 
@@ -41,6 +40,7 @@ Route::post('/webhooks/shipping', [WebhookController::class, 'shipping']);
 
 // Protected passenger & authenticated routes
 Route::middleware('auth')->group(function () {
+    Route::post('/upload', [UploadController::class, 'upload'])->middleware('throttle:15,1');
     Route::get('/private-files/ktp/{filename}', [UploadController::class, 'showKtp']);
     Route::get('/notifications', [ReportController::class, 'notifications']);
     Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
@@ -65,7 +65,7 @@ Route::middleware('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 // Staff Auth
-Route::post('/staff/auth/login', [StaffAuthController::class, 'login']);
+Route::post('/staff/auth/login', [StaffAuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/staff/auth/logout', [StaffAuthController::class, 'logout'])->middleware('auth');
 Route::get('/staff/auth/user', [StaffAuthController::class, 'user']);
 
