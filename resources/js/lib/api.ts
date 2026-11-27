@@ -19,14 +19,14 @@ export function setTabToken(kind: 'passenger' | 'staff', token: string | null) {
     if (kind === 'passenger') {
       try {
         window.localStorage.setItem(key, token)
-      } catch {}
+      } catch { }
     }
   } else {
     window.sessionStorage.removeItem(key)
     if (kind === 'passenger') {
       try {
         window.localStorage.removeItem(key)
-      } catch {}
+      } catch { }
     }
   }
 }
@@ -43,7 +43,7 @@ export function getTabToken(kind: 'passenger' | 'staff'): string | null {
         window.sessionStorage.setItem(key, fromLocal)
         return fromLocal
       }
-    } catch {}
+    } catch { }
   }
   return null
 }
@@ -86,7 +86,7 @@ async function request<T = unknown>(
 
   if (res.status === 419) {
     // CSRF token expired — refetch and retry once
-    await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' }).catch(() => {})
+    await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' }).catch(() => { })
     const retryXsrf = getCookie('XSRF-TOKEN')
     if (retryXsrf) headers['X-XSRF-TOKEN'] = retryXsrf
     const retry = await fetch(url, { ...opts, headers })
@@ -153,7 +153,7 @@ export const api = {
 // Typed endpoint helpers
 // ========================
 
-import type { Claim, InvItem, Report, Shipment, ShippingRateOption, TrackingHistoryEntry } from './data'
+import type { Claim, InvItem, PackageSpecs, Report, Shipment, ShippingRateOption, TrackingHistoryEntry } from './data'
 
 export type SavedAddress = {
   label?: string
@@ -248,7 +248,7 @@ export const uploadApi = {
 
     let res = await sendUpload()
     if (res.status === 419) {
-      await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' }).catch(() => {})
+      await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' }).catch(() => { })
       res = await sendUpload()
     }
     if (!res.ok) throw await parseError(res)
@@ -301,8 +301,11 @@ export const reportApi = {
       message?: string
       report: Report
     }>(`/api/reports/${kode}/bast/cancel-payment`),
-  shippingRates: (postal_code: string) =>
-    api.post<{ configured: boolean; source: string; couriers: ShippingRateOption[] }>('/api/shipping/rates', { postal_code }),
+  shippingRates: (postal_code: string, report_code?: string) =>
+    api.post<{ configured: boolean; source: string; package?: PackageSpecs; couriers: ShippingRateOption[] }>(
+      '/api/shipping/rates',
+      { postal_code, ...(report_code ? { report_code } : {}) },
+    ),
   syncShipping: (kode: string) =>
     api.post<{
       shipping_status: string

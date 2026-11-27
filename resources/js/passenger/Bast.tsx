@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Clock, Copy, Download, ImageDown, Lock, MapPin, Maximize2, RefreshCw, RotateCcw, ShieldCheck, Store, Truck, Users, X } from 'lucide-react'
 import { Badge, Banner, Button, cx, Field, inputCls, QRCode, RadioDot, RouteConnector, rupiah, Toggle, useAnimatedNumber, useCategories, useToast } from '../lib/ui'
-import type { ShippingRateOption } from '../lib/data'
-import { getTabToken, reportApi } from '../lib/api'
+import type { PackageSpecs, ShippingRateOption } from '../lib/data'
+import { api, getTabToken, reportApi } from '../lib/api'
 import { downloadPdfDocument, downloadTicketImage } from '../lib/export'
-import { cleanCourierName, formatTrackingEvent, formatTrackingTimestamp, getShippingSummary, SHIPPING_MILESTONES } from '../lib/shipping'
+import { calcPackageMetrics, cleanCourierName, formatTrackingEvent, formatTrackingTimestamp, getShippingSummary, SHIPPING_MILESTONES } from '../lib/shipping'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -305,6 +305,8 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   }))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [couriers, setCouriers] = useState<ShippingRateOption[]>(DEFAULT_COURIERS)
+  const [pkgSpecs, setPkgSpecs] = useState<PackageSpecs | null>(null)
+  const [overrideAmount, setOverrideAmount] = useState<number | null>(null)
   const [ratesLoading, setRatesLoading] = useState(false)
   const [courier, setCourier] = useState(initialDraft?.courier || r?.shippingCourier || DEFAULT_COURIERS[0].k)
   const [insure, setInsure] = useState(() => (typeof initialDraft?.insure === 'boolean' ? initialDraft.insure : true))
@@ -326,7 +328,8 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const autoSyncedRef = useRef(false)
   const lastReturnSyncRef = useRef(0)
   const c = couriers.find((x) => x.k === courier) ?? couriers[0] ?? DEFAULT_COURIERS[0]
-  const total = c.price + (insure ? 5000 : 0) + 2500
+  const rawTotal = c.price + (insure ? 5000 : 0) + 2500
+  const total = overrideAmount ?? rawTotal
   const displayedAmount = r?.shippingAmount && phase !== 'form' ? r.shippingAmount : total
   const shown = useAnimatedNumber(total)
 
@@ -349,6 +352,22 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   } = shipSummary
 
   useEffect(() => {
+    if (phase === 'paid') return
+    let cancelled = false
+    api
+      .get<{ override_amount?: number | null }>('/api/payment/config')
+      .then((res) => {
+        if (!cancelled && res.override_amount && res.override_amount > 0) {
+          setOverrideAmount(res.override_amount)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [phase])
+
+  useEffect(() => {
     if (phase !== 'form') return
     if (!/^\d{5}$/.test(f.zip)) {
       setCouriers(DEFAULT_COURIERS)
@@ -357,9 +376,11 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
     let cancelled = false
     setRatesLoading(true)
     reportApi
-      .shippingRates(f.zip)
+      .shippingRates(f.zip, id)
       .then((res) => {
-        if (cancelled || !res.couriers?.length) return
+        if (cancelled) return
+        if (res.package) setPkgSpecs(res.package)
+        if (!res.couriers?.length) return
         setCouriers(res.couriers)
         setCourier((cur) => (res.couriers.some((opt) => opt.k === cur) ? cur : res.couriers[0].k))
       })
@@ -938,10 +959,24 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
               </div>
             </section>
             <section className="rounded-[20px] border border-line bg-white p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-2.5 flex items-center justify-between">
                 <h2 className="text-[15px] font-bold text-ink">Opsi Pengiriman</h2>
                 <span className="text-xs font-medium text-muted">{ratesLoading ? 'Memuat tarif...' : 'Pilih kurir'}</span>
               </div>
+              {(() => {
+                const m = calcPackageMetrics({
+                  weightGrams: pkgSpecs?.weight_grams ?? r?.packageWeightGrams ?? 1000,
+                  lengthCm: pkgSpecs?.length_cm ?? r?.packageLengthCm ?? null,
+                  widthCm: pkgSpecs?.width_cm ?? r?.packageWidthCm ?? null,
+                  heightCm: pkgSpecs?.height_cm ?? r?.packageHeightCm ?? null,
+                })
+                return (
+                  <p className="mb-3 rounded-xl bg-tint/60 px-3 py-2 text-[11px] font-medium text-primary-dark">
+                    Berat terhitung: <strong className="font-bold">{m.kgText} kg</strong> ({m.chargeableGrams.toLocaleString('id-ID')} g)
+                    {m.dimensionsText ? ` • Dimensi ${m.dimensionsText}` : ''}
+                  </p>
+                )
+              })()}
               <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="Opsi pengiriman">
                 {couriers.map((co) => {
                   const active = courier === co.k
@@ -1021,6 +1056,12 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                     <dd className="tabular-nums text-ink">{rupiah(v as number)}</dd>
                   </div>
                 ))}
+                {overrideAmount !== null && overrideAmount < rawTotal && (
+                  <div className="flex justify-between font-medium text-success">
+                    <dt>Potongan Penyesuaian Tarif</dt>
+                    <dd className="tabular-nums">-{rupiah(rawTotal - overrideAmount)}</dd>
+                  </div>
+                )}
                 <div className="mt-1 flex justify-between border-t border-[#d6d0d3] pt-2">
                   <dt className="font-bold text-ink">Total Tagihan</dt>
                   <dd className="text-lg font-bold tabular-nums text-ink" aria-live="polite">

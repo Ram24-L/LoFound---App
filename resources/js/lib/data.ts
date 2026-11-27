@@ -30,6 +30,15 @@ export const COLORS = [
 export type ReportStatus = 'diterima' | 'pencarian' | 'kandidat' | 'ditinjau' | 'perlu_info' | 'ditolak' | 'bast' | 'dikirim' | 'selesai' | 'dibatalkan' | 'kedaluwarsa'
 
 export type TrackingHistoryEntry = { status: string; note: string; updated_at: string }
+export type PackageSpecs = {
+  weight_grams: number
+  length_cm: number | null
+  width_cm: number | null
+  height_cm: number | null
+  volumetric_grams: number | null
+  chargeable_grams: number
+  estimated_value: number
+}
 export type ShippingRateOption = {
   k: string
   company: string
@@ -75,6 +84,11 @@ export type Report = {
   biteshipOrderId?: string | null
   biteshipTrackingId?: string | null
   trackingHistory?: TrackingHistoryEntry[]
+  packageWeightGrams?: number | null
+  packageLengthCm?: number | null
+  packageWidthCm?: number | null
+  packageHeightCm?: number | null
+  packageValue?: number | null
 }
 
 export const STATUS_META: Record<ReportStatus, { label: string; tone: 'success' | 'info' | 'coral' | 'warn' | 'danger' | 'neutral'; action?: boolean; locked?: boolean }> = {
@@ -210,6 +224,11 @@ export type InvItem = {
   found: string
   status: InvStatus
   expiresIn: number
+  weightGrams?: number
+  lengthCm?: number | null
+  widthCm?: number | null
+  heightCm?: number | null
+  estimatedValue?: number
   secret: { detail: string; serial: string; locker: string; notes: string }
 }
 export const INVENTORY: InvItem[] = [
@@ -280,6 +299,11 @@ export type Shipment = {
   biteship_tracking_id?: string | null
   shipping_status?: string | null
   tracking_history?: TrackingHistoryEntry[]
+  weight_grams?: number | null
+  length_cm?: number | null
+  width_cm?: number | null
+  height_cm?: number | null
+  estimated_value?: number | null
 }
 export const SHIPMENTS: Shipment[] = [
   { no: 'LPR-2026-042', recipient: 'M. Ramdhan M.', courier: 'KAI Logistik Express', dest: 'Bogor Tengah, Bogor', paid: '2 Nov, 15:10', status: 'Menunggu Resi' },

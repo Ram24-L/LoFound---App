@@ -6,6 +6,7 @@ import { Modal, PageHead, Panel, Tabs, td, th } from './common'
 import { staffApi } from '../lib/api'
 import { downloadPdfDocument } from '../lib/export'
 import {
+  calcPackageMetrics,
   cleanCourierName,
   formatTrackingEvent,
   formatTrackingTimestamp,
@@ -56,6 +57,12 @@ export function ShippingQueuePage() {
   }
 
   const printLabel = (r: Shipment, labelAwb: string) => {
+    const pkg = calcPackageMetrics({
+      weightGrams: r.weight_grams,
+      lengthCm: r.length_cm,
+      widthCm: r.width_cm,
+      heightCm: r.height_cm,
+    })
     downloadPdfDocument({
       filename: `Label_Pengiriman_${labelAwb}.pdf`,
       title: `LABEL PENGIRIMAN EKSPEDISI #${labelAwb}`,
@@ -66,6 +73,7 @@ export function ShippingQueuePage() {
         ['Nomor Laporan', r.no || '-'],
         ['Kode BAST', r.bast_code || '-'],
         ['Barang', r.item_name || 'Barang Temuan'],
+        ['Berat & Dimensi', `${pkg.chargeableGrams.toLocaleString('id-ID')} g (${pkg.kgText} kg)${pkg.dimensionsText ? ` • ${pkg.dimensionsText}` : ''}`],
         ['Nama Penerima', r.recipient || '-'],
         ['No. Telepon', r.recipient_phone || '-'],
         ['Jasa Kurir', cleanCourierName(r.courier)],
@@ -504,6 +512,20 @@ export function ShippingQueuePage() {
                     <p className="text-muted">Barang & Penerima</p>
                     <p className="font-bold text-ink">{detailRow.item_name || 'Barang Temuan'}</p>
                     <p className="text-ink">{detailRow.recipient}</p>
+                    {(() => {
+                      const pkg = calcPackageMetrics({
+                        weightGrams: detailRow.weight_grams,
+                        lengthCm: detailRow.length_cm,
+                        widthCm: detailRow.width_cm,
+                        heightCm: detailRow.height_cm,
+                      })
+                      return (
+                        <p className="mt-0.5 text-[11px] font-medium text-muted">
+                          Berat {pkg.chargeableGrams.toLocaleString('id-ID')} g ({pkg.kgText} kg)
+                          {pkg.dimensionsText ? ` • ${pkg.dimensionsText}` : ''}
+                        </p>
+                      )
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">

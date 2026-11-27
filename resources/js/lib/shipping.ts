@@ -4,6 +4,31 @@ export const HOLD_SHIP_STATUSES = ['on_hold'] as const
 
 export const SHIPPING_MILESTONES = ['Dikemas', 'Dijemput', 'Dikirim', 'Tiba'] as const
 
+export function calcPackageMetrics(params: {
+  weightGrams?: number | null
+  lengthCm?: number | null
+  widthCm?: number | null
+  heightCm?: number | null
+}) {
+  const actualGrams = Math.max(50, Math.round(params.weightGrams || 1000))
+  const l = params.lengthCm && params.lengthCm > 0 ? Math.round(params.lengthCm) : null
+  const w = params.widthCm && params.widthCm > 0 ? Math.round(params.widthCm) : null
+  const h = params.heightCm && params.heightCm > 0 ? Math.round(params.heightCm) : null
+  const volumetricGrams = l && w && h ? Math.ceil(((l * w * h) / 6000) * 1000) : null
+  const chargeableGrams = Math.max(actualGrams, volumetricGrams ?? 0)
+  return {
+    actualGrams,
+    lengthCm: l,
+    widthCm: w,
+    heightCm: h,
+    volumetricGrams,
+    chargeableGrams,
+    dimensionsText: l && w && h ? `${l} × ${w} × ${h} cm` : null,
+    kgText: (chargeableGrams / 1000).toLocaleString('id-ID', { maximumFractionDigits: 2 }),
+    actualKgText: (actualGrams / 1000).toLocaleString('id-ID', { maximumFractionDigits: 2 }),
+  }
+}
+
 export function cleanCourierName(name: string | null | undefined): string {
   const raw = (name || '').trim()
   if (!raw) return 'Ekspedisi'

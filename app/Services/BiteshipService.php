@@ -29,14 +29,16 @@ class BiteshipService
     /**
      * Default fallback courier list when Biteship key is unset or temporarily unreachable.
      */
-    public function fallbackCouriers(): array
+    public function fallbackCouriers(int $chargeableGrams = 1000): array
     {
+        $kgMultiplier = max(1, (int) ceil(max(50, $chargeableGrams) / 1000));
+
         return [
             [
                 'k'       => 'KAI Logistik Express',
                 'company' => 'kalog',
                 'type'    => 'express',
-                'price'   => 18000,
+                'price'   => 18000 * $kgMultiplier,
                 'eta'     => '1–2 hari kerja',
                 'tag'     => 'Tercepat',
                 'desc'    => 'Layanan kilat resmi KAI Logistik',
@@ -46,7 +48,7 @@ class BiteshipService
                 'k'       => 'JNE Reguler',
                 'company' => 'jne',
                 'type'    => 'reg',
-                'price'   => 16000,
+                'price'   => 16000 * $kgMultiplier,
                 'eta'     => '2–3 hari kerja',
                 'tag'     => 'Populer',
                 'desc'    => 'Pengiriman reguler ke seluruh kota',
@@ -56,7 +58,7 @@ class BiteshipService
                 'k'       => 'Pos Indonesia',
                 'company' => 'pos',
                 'type'    => 'reg',
-                'price'   => 14000,
+                'price'   => 14000 * $kgMultiplier,
                 'eta'     => '3–4 hari kerja',
                 'tag'     => 'Hemat',
                 'desc'    => 'Tarif ekonomis & jangkauan luas',
@@ -66,21 +68,57 @@ class BiteshipService
     }
 
     /**
-     * Query Biteship /rates/couriers for real-time shipping rates by postal code.
+     * Query Biteship /rates/couriers for real-time shipping rates by postal code, weight & dimensions.
      *
-     * @return array{configured: bool, source: string, couriers: array<int, array<string, mixed>>}
+     * @return array{configured: bool, source: string, package: array<string, int|null>, couriers: array<int, array<string, mixed>>}
      */
-    public function getRates(string $destinationPostalCode, int $weightGrams = 1000, int $itemValue = 250000): array
-    {
+    public function getRates(
+        string $destinationPostalCode,
+        int $weightGrams = 1000,
+        int $itemValue = 250000,
+        ?int $lengthCm = null,
+        ?int $widthCm = null,
+        ?int $heightCm = null,
+        ?string $itemName = null,
+    ): array {
         $cleanZip = preg_replace('/\D+/', '', $destinationPostalCode) ?? '';
         $apiKey = (string) config('services.biteship.api_key', '');
+
+        $weight = max(50, $weightGrams);
+        $value = max(1000, $itemValue);
+        $hasDims = $lengthCm && $lengthCm > 0 && $widthCm && $widthCm > 0 && $heightCm && $heightCm > 0;
+        $volumetricGrams = $hasDims ? (int) ceil((($lengthCm * $widthCm * $heightCm) / 6000) * 1000) : null;
+        $chargeableGrams = max($weight, $volumetricGrams ?? 0);
+
+        $packageSummary = [
+            'weight_grams'     => $weight,
+            'length_cm'        => $hasDims ? (int) $lengthCm : null,
+            'width_cm'         => $hasDims ? (int) $widthCm : null,
+            'height_cm'        => $hasDims ? (int) $heightCm : null,
+            'volumetric_grams' => $volumetricGrams,
+            'chargeable_grams' => $chargeableGrams,
+            'estimated_value'  => $value,
+        ];
 
         if (! $apiKey || strlen($cleanZip) !== 5) {
             return [
                 'configured' => $this->isConfigured(),
                 'source'     => 'fallback',
-                'couriers'   => $this->fallbackCouriers(),
+                'package'    => $packageSummary,
+                'couriers'   => $this->fallbackCouriers($chargeableGrams),
             ];
+        }
+
+        $rateItem = [
+            'name'     => substr($itemName ?: 'Barang Temuan KRL', 0, 100),
+            'value'    => $value,
+            'weight'   => $weight,
+            'quantity' => 1,
+        ];
+        if ($hasDims) {
+            $rateItem['length'] = (int) $lengthCm;
+            $rateItem['width'] = (int) $widthCm;
+            $rateItem['height'] = (int) $heightCm;
         }
 
         try {
@@ -93,14 +131,7 @@ class BiteshipService
                     'origin_postal_code'      => (int) config('services.biteship.origin_postal_code', 11110),
                     'destination_postal_code' => (int) $cleanZip,
                     'couriers'                => (string) config('services.biteship.couriers', 'jne,pos,jnt,sicepat,anteraja'),
-                    'items'                   => [
-                        [
-                            'name'     => 'Barang Temuan KRL',
-                            'value'    => max(1000, $itemValue),
-                            'weight'   => max(100, $weightGrams),
-                            'quantity' => 1,
-                        ],
-                    ],
+                    'items'                   => [$rateItem],
                 ]);
 
             if (! $response->successful()) {
@@ -112,7 +143,8 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
-                    'couriers'   => $this->fallbackCouriers(),
+                    'package'    => $packageSummary,
+                    'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
             }
 
@@ -121,7 +153,8 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
-                    'couriers'   => $this->fallbackCouriers(),
+                    'package'    => $packageSummary,
+                    'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
             }
 
@@ -130,13 +163,15 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
-                    'couriers'   => $this->fallbackCouriers(),
+                    'package'    => $packageSummary,
+                    'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
             }
 
             return [
                 'configured' => true,
                 'source'     => 'biteship',
+                'package'    => $packageSummary,
                 'couriers'   => $normalized,
             ];
         } catch (\Throwable $e) {
@@ -145,7 +180,8 @@ class BiteshipService
             return [
                 'configured' => true,
                 'source'     => 'fallback',
-                'couriers'   => $this->fallbackCouriers(),
+                'package'    => $packageSummary,
+                'couriers'   => $this->fallbackCouriers($chargeableGrams),
             ];
         }
     }
@@ -162,10 +198,12 @@ class BiteshipService
             return ['ok' => false, 'error' => 'Biteship API key belum dikonfigurasi.'];
         }
 
-        $bast->loadMissing(['klaim.laporan.items', 'klaim.laporan.user']);
+        $bast->loadMissing(['klaim.laporan.items', 'klaim.laporan.user', 'klaim.barangTemuan']);
         $laporan = $bast->klaim?->laporan;
         $user = $laporan?->user;
-        $itemName = $laporan?->items?->first()?->nama_barang ?: 'Barang Temuan KRL';
+        $barang = $bast->klaim?->barangTemuan;
+        $itemName = $barang?->nama_barang ?: ($laporan?->items?->first()?->nama_barang ?: 'Barang Temuan KRL');
+        $specs = $barang?->shippingSpecs();
 
         [$company, $serviceType] = $this->resolveCourierPair($bast);
 
@@ -173,6 +211,19 @@ class BiteshipService
         $destName = $bast->recipient_name ?: ($user?->name ?: 'Penumpang KRL');
         $destPhone = $this->normalizePhone($bast->recipient_phone ?: ($user?->phone ?: '081234567890'));
         $destAddr = $bast->alamat_kirim ?: 'Bogor Tengah, Kota Bogor';
+
+        $orderItem = [
+            'name'        => substr($itemName, 0, 100),
+            'description' => "Pengiriman BAST {$bast->kode}",
+            'value'       => $specs['estimated_value'] ?? 250000,
+            'weight'      => $specs['weight_grams'] ?? 1000,
+            'quantity'    => 1,
+        ];
+        if (! empty($specs['length_cm']) && ! empty($specs['width_cm']) && ! empty($specs['height_cm'])) {
+            $orderItem['length'] = $specs['length_cm'];
+            $orderItem['width'] = $specs['width_cm'];
+            $orderItem['height'] = $specs['height_cm'];
+        }
 
         $payload = [
             'shipper_contact_name'      => (string) config('services.biteship.origin_name', 'Posko CS LoFound KAI Commuter'),
@@ -190,15 +241,7 @@ class BiteshipService
             'courier_type'              => $serviceType,
             'delivery_type'             => 'now',
             'reference_id'              => $bast->kode . '-' . now()->format('YmdHis') . '-' . substr(bin2hex(random_bytes(2)), 0, 4),
-            'items'                     => [
-                [
-                    'name'        => substr($itemName, 0, 100),
-                    'description' => "Pengiriman BAST {$bast->kode}",
-                    'value'       => 250000,
-                    'weight'      => 1000,
-                    'quantity'    => 1,
-                ],
-            ],
+            'items'                     => [$orderItem],
         ];
 
         try {

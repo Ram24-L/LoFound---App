@@ -595,8 +595,20 @@ class ReportController
             };
 
             $biteship = app(BiteshipService::class);
+            $klaim->loadMissing('barangTemuan');
+            $foundItem = $klaim->barangTemuan;
+            $specs = $foundItem?->shippingSpecs();
+
             if ($biteship->isConfigured() && $company && $type && strlen($zip) === 5) {
-                $rates = $biteship->getRates($zip);
+                $rates = $biteship->getRates(
+                    $zip,
+                    $specs['weight_grams'] ?? 1000,
+                    $specs['estimated_value'] ?? 250000,
+                    $specs['length_cm'] ?? null,
+                    $specs['width_cm'] ?? null,
+                    $specs['height_cm'] ?? null,
+                    $foundItem?->nama_barang
+                );
                 foreach ($rates['couriers'] ?? [] as $rateOpt) {
                     if (
                         strtolower((string) ($rateOpt['company'] ?? '')) === strtolower((string) $company) &&
@@ -609,10 +621,13 @@ class ReportController
                 }
             }
 
+            $pg = app(PaymentGatewayService::class);
+            $overrideAmount = $pg->overrideAmount();
             $insure = $request->boolean('insure');
             $insureFee = $insure ? 5000 : 0;
             $adminFee = 2500;
-            $ongkir = $basePrice + $insureFee + $adminFee;
+            $calculatedTotal = $basePrice + $insureFee + $adminFee;
+            $ongkir = $overrideAmount !== null ? $overrideAmount : $calculatedTotal;
 
             $bastData['alamat_kirim'] = implode(', ', array_filter([
                 $request->input('address'),
@@ -627,33 +642,43 @@ class ReportController
             $bastData['courier_type'] = $type ?: $existingBast?->courier_type;
             $bastData['ongkir'] = $ongkir;
 
-            $pg = app(PaymentGatewayService::class);
             if ($pg->isConfigured()) {
                 $midtransMode = $pg->isProduction() ? 'production' : 'sandbox';
                 $orderId = $pg->generateOrderId($bastData['kode']);
 
-                $itemDetails = [
-                    [
-                        'id'       => 'ONGKIR',
-                        'price'    => $basePrice,
-                        'quantity' => 1,
-                        'name'     => substr("Ongkos Kirim {$courier}", 0, 50),
-                    ],
-                ];
-                if ($insureFee > 0) {
+                if ($overrideAmount !== null) {
+                    $itemDetails = [
+                        [
+                            'id'       => 'ONGKIR_OVERRIDE',
+                            'price'    => $overrideAmount,
+                            'quantity' => 1,
+                            'name'     => substr("Pengiriman {$courier}", 0, 50),
+                        ],
+                    ];
+                } else {
+                    $itemDetails = [
+                        [
+                            'id'       => 'ONGKIR',
+                            'price'    => $basePrice,
+                            'quantity' => 1,
+                            'name'     => substr("Ongkos Kirim {$courier}", 0, 50),
+                        ],
+                    ];
+                    if ($insureFee > 0) {
+                        $itemDetails[] = [
+                            'id'       => 'INSURANCE',
+                            'price'    => $insureFee,
+                            'quantity' => 1,
+                            'name'     => 'Proteksi Asuransi Pengiriman',
+                        ];
+                    }
                     $itemDetails[] = [
-                        'id'       => 'INSURANCE',
-                        'price'    => $insureFee,
+                        'id'       => 'ADMIN_FEE',
+                        'price'    => $adminFee,
                         'quantity' => 1,
-                        'name'     => 'Proteksi Asuransi Pengiriman',
+                        'name'     => 'Biaya Layanan LoFound',
                     ];
                 }
-                $itemDetails[] = [
-                    'id'       => 'ADMIN_FEE',
-                    'price'    => $adminFee,
-                    'quantity' => 1,
-                    'name'     => 'Biaya Layanan LoFound',
-                ];
 
                 $tempBast = $existingBast ?? new BastPengambilan($bastData);
                 $tempBast->kode = $bastData['kode'];
@@ -849,10 +874,46 @@ class ReportController
     public function shippingRates(Request $request, BiteshipService $biteship): JsonResponse
     {
         $request->validate([
-            'postal_code' => 'required|string|regex:/^\d{5}$/',
+            'postal_code'     => 'required|string|regex:/^\d{5}$/',
+            'report_code'     => 'nullable|string',
+            'weight_grams'    => 'nullable|integer|min:50|max:50000',
+            'length_cm'       => 'nullable|integer|min:1|max:300',
+            'width_cm'        => 'nullable|integer|min:1|max:300',
+            'height_cm'       => 'nullable|integer|min:1|max:300',
+            'estimated_value' => 'nullable|integer|min:1000|max:100000000',
         ]);
 
-        return response()->json($biteship->getRates((string) $request->input('postal_code')));
+        $weight = $request->filled('weight_grams') ? (int) $request->input('weight_grams') : 1000;
+        $value = $request->filled('estimated_value') ? (int) $request->input('estimated_value') : 250000;
+        $length = $request->filled('length_cm') ? (int) $request->input('length_cm') : null;
+        $width = $request->filled('width_cm') ? (int) $request->input('width_cm') : null;
+        $height = $request->filled('height_cm') ? (int) $request->input('height_cm') : null;
+        $itemName = null;
+
+        if ($request->filled('report_code')) {
+            $laporan = LaporanBarangHilang::where('kode', (string) $request->input('report_code'))
+                ->where('user_id', $request->user()->id)
+                ->with(['klaim.barangTemuan', 'pencocokan.barangTemuan'])
+                ->first();
+
+            $klaim = $laporan?->klaim?->where('status_verifikasi', 'disetujui')->sortByDesc('id')->first()
+                ?? $laporan?->klaim?->sortByDesc('id')->first();
+            $foundItem = $klaim?->barangTemuan ?? $laporan?->pencocokan?->first()?->barangTemuan;
+
+            if ($foundItem) {
+                $specs = $foundItem->shippingSpecs();
+                $weight = $specs['weight_grams'];
+                $value = $specs['estimated_value'];
+                $length = $specs['length_cm'];
+                $width = $specs['width_cm'];
+                $height = $specs['height_cm'];
+                $itemName = $foundItem->nama_barang;
+            }
+        }
+
+        return response()->json(
+            $biteship->getRates((string) $request->input('postal_code'), $weight, $value, $length, $width, $height, $itemName)
+        );
     }
 
     /**

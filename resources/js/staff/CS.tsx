@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Camera, Check, CheckCircle2, Clock, Flag, Info, Keyboard, Link2, Lock, MessageSquare, Pencil, Plus, QrCode, RefreshCw, ScanLine, Search, ShieldCheck, UserCheck, Users, X, XCircle } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Camera, Check, CheckCircle2, Clock, Flag, Info, Keyboard, Link2, Lock, MessageSquare, Pencil, Plus, QrCode, RefreshCw, Scale, ScanLine, Search, ShieldCheck, UserCheck, Users, X, XCircle } from 'lucide-react'
 import { COLORS, STATIONS, type Claim, type InvItem, type InvStatus } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, useCategories, useToast } from '../lib/ui'
+import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, rupiah, useCategories, useToast } from '../lib/ui'
+import { calcPackageMetrics } from '../lib/shipping'
 import { Drawer, Modal, PageHead, Panel, Tabs, td, th, useStaff } from './common'
 import { staffApi, uploadApi } from '../lib/api'
 
@@ -147,8 +148,41 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
   const claimLocked = edit?.status === 'Dalam Klaim'
   const defStation = staffUser?.station && staffUser.station !== 'Pusat' ? staffUser.station : 'Jakarta Kota'
   const nowIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-  const blank = { cat: '', name: '', color: '', station: defStation, found: nowIso, detail: '', serial: '', locker: '', notes: '', photo_url: '' }
-  const [f, setF] = useState(edit ? { cat: edit.cat, name: edit.name, color: edit.color, station: edit.station, found: nowIso, photo_url: (edit.secret as any)?.photo || '', ...edit.secret } : blank)
+  const blank = {
+    cat: '',
+    name: '',
+    color: '',
+    station: defStation,
+    found: nowIso,
+    detail: '',
+    serial: '',
+    locker: '',
+    notes: '',
+    photo_url: '',
+    weight_grams: '1000',
+    length_cm: '',
+    width_cm: '',
+    height_cm: '',
+    estimated_value: '250000',
+  }
+  const [f, setF] = useState(
+    edit
+      ? {
+          cat: edit.cat,
+          name: edit.name,
+          color: edit.color,
+          station: edit.station,
+          found: nowIso,
+          photo_url: (edit.secret as any)?.photo || '',
+          weight_grams: String(edit.weightGrams ?? 1000),
+          length_cm: edit.lengthCm ? String(edit.lengthCm) : '',
+          width_cm: edit.widthCm ? String(edit.widthCm) : '',
+          height_cm: edit.heightCm ? String(edit.heightCm) : '',
+          estimated_value: String(edit.estimatedValue ?? 250000),
+          ...edit.secret,
+        }
+      : blank
+  )
   const isPresetColor = !f.color || COLORS.some((c) => c.name === f.color)
   const [customColorMode, setCustomColorMode] = useState(!isPresetColor)
   const [customHex, setCustomHex] = useState('#318FB5')
@@ -157,6 +191,13 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const set = (k: keyof typeof f, v: string) => setF({ ...f, [k]: v })
+
+  const pkgPreview = calcPackageMetrics({
+    weightGrams: Number(f.weight_grams) || 1000,
+    lengthCm: f.length_cm ? Number(f.length_cm) : null,
+    widthCm: f.width_cm ? Number(f.width_cm) : null,
+    heightCm: f.height_cm ? Number(f.height_cm) : null,
+  })
 
   const handlePhotoUpload = async (file?: File) => {
     if (!file) return
@@ -178,16 +219,47 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
     if (!f.cat) er.cat = 'Pilih salah satu kategori.'
     if (f.name.trim().length < 3) er.name = 'Kolom ini wajib diisi.'
     if (!edit && !f.photo_url) er.photo = 'Foto asli barang wajib diunggah oleh petugas.'
+
+    const wg = Number(f.weight_grams)
+    if (!f.weight_grams || Number.isNaN(wg) || wg < 50 || wg > 50000) {
+      er.weight_grams = 'Berat harus antara 50 – 50.000 gram.'
+    }
+
+    const dimFilled = [f.length_cm, f.width_cm, f.height_cm].filter((v) => v.trim() !== '').length
+    if (dimFilled > 0 && dimFilled < 3) {
+      er.dimensions = 'Isi lengkap Panjang, Lebar, dan Tinggi (cm), atau kosongkan ketiganya.'
+    } else if (dimFilled === 3) {
+      const l = Number(f.length_cm)
+      const w = Number(f.width_cm)
+      const h = Number(f.height_cm)
+      if ([l, w, h].some((v) => Number.isNaN(v) || v < 1 || v > 300)) {
+        er.dimensions = 'Tiap sisi dimensi harus 1 – 300 cm.'
+      }
+    }
+
+    const ev = Number(f.estimated_value)
+    if (!f.estimated_value || Number.isNaN(ev) || ev < 1000) {
+      er.estimated_value = 'Estimasi nilai minimal Rp 1.000.'
+    }
+
     setErrors(er)
     if (Object.keys(er).length) return
     setBusy(true)
+    const payload = {
+      ...f,
+      weight_grams: Math.round(wg),
+      length_cm: f.length_cm.trim() ? Math.round(Number(f.length_cm)) : null,
+      width_cm: f.width_cm.trim() ? Math.round(Number(f.width_cm)) : null,
+      height_cm: f.height_cm.trim() ? Math.round(Number(f.height_cm)) : null,
+      estimated_value: Math.round(ev),
+    }
     try {
       if (edit) {
-        const res = await staffApi.cs.updateFoundItem(edit.code, f)
+        const res = await staffApi.cs.updateFoundItem(edit.code, payload)
         setInventory((inv) => inv.map((i) => (i.code === edit.code ? res.item : i)))
         toast('Data barang diperbarui. Tercatat di log audit.')
       } else {
-        const res = await staffApi.cs.storeFoundItem(f)
+        const res = await staffApi.cs.storeFoundItem(payload)
         setInventory((inv) => [res.item, ...inv])
         toast(`Barang ${res.item.code} tersimpan. Sistem mencocokkan dengan ${res.matches} laporan.`)
         setF(blank)
@@ -220,7 +292,7 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
     >
       {claimLocked && (
         <Banner tone="warn" icon={Lock} className="mb-4">
-          Kategori terkunci karena sudah ada klaim aktif. Saat status "Dalam Klaim", hanya catatan CS yang dapat diubah.
+          Kategori terkunci karena sudah ada klaim aktif. Saat status "Dalam Klaim", hanya berat/dimensi pengiriman dan catatan CS yang dapat diubah.
         </Banner>
       )}
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
@@ -365,6 +437,89 @@ function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => voi
           <Field label="Catatan CS">{(a) => <textarea {...a} rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Kondisi barang, saksi, dll." className={inputCls() + ' resize-none bg-white py-2.5'} />}</Field>
         </div>
       </div>
+
+      <div className="mt-6 rounded-2xl border border-line bg-[#f8fbfd] p-4">
+        <h3 className="mb-1 flex items-center gap-2 text-sm font-bold text-ink">
+          <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs text-white">2</span>
+          <Scale className="size-4 text-primary" aria-hidden /> Atribut Pengiriman &amp; Dimensi Paket
+        </h3>
+        <p className="mb-4 text-xs text-muted">Dipakai untuk menghitung tarif ongkir kurir Biteship secara akurat sebelum paket dikirim.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Berat Aktual (gram)" required error={errors.weight_grams}>
+            {(a) => (
+              <div className="relative">
+                <input
+                  {...a}
+                  type="text"
+                  inputMode="numeric"
+                  value={f.weight_grams}
+                  onChange={(e) => set('weight_grams', e.target.value.replace(/\D/g, ''))}
+                  placeholder="1000"
+                  className={inputCls(!!errors.weight_grams) + ' h-11 bg-white pr-16 font-mono'}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted">
+                  = {pkgPreview.actualKgText} kg
+                </span>
+              </div>
+            )}
+          </Field>
+          <Field label="Estimasi Nilai (Rp)" required error={errors.estimated_value}>
+            {(a) => (
+              <input
+                {...a}
+                type="text"
+                inputMode="numeric"
+                value={f.estimated_value}
+                onChange={(e) => set('estimated_value', e.target.value.replace(/\D/g, ''))}
+                placeholder="250000"
+                className={inputCls(!!errors.estimated_value) + ' h-11 bg-white font-mono'}
+              />
+            )}
+          </Field>
+        </div>
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-semibold text-muted">Dimensi Paket (P × L × T dalam cm, opsional)</p>
+          <div className="grid grid-cols-3 gap-2.5">
+            {(
+              [
+                ['length_cm', 'Panjang (cm)'],
+                ['width_cm', 'Lebar (cm)'],
+                ['height_cm', 'Tinggi (cm)'],
+              ] as const
+            ).map(([k, ph]) => (
+              <input
+                key={k}
+                type="text"
+                inputMode="numeric"
+                aria-label={ph}
+                value={f[k]}
+                onChange={(e) => set(k, e.target.value.replace(/\D/g, ''))}
+                placeholder={ph}
+                className={inputCls(!!errors.dimensions) + ' h-11 bg-white font-mono text-sm'}
+              />
+            ))}
+          </div>
+          {errors.dimensions && (
+            <p role="alert" className="mt-1.5 flex items-center gap-1 text-xs font-medium text-danger">
+              <AlertCircle className="size-3.5" aria-hidden /> {errors.dimensions}
+            </p>
+          )}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2.5 text-xs ring-1 ring-line">
+          <span className="text-muted">
+            Berat Aktual: <strong className="text-ink">{pkgPreview.actualGrams.toLocaleString('id-ID')} g</strong>
+            {pkgPreview.volumetricGrams ? (
+              <>
+                {' '}
+                • Volumetrik: <strong className="text-ink">{pkgPreview.volumetricGrams.toLocaleString('id-ID')} g</strong>
+              </>
+            ) : null}
+          </span>
+          <span className="font-bold text-primary-dark">
+            Terhitung Kurir: {pkgPreview.chargeableGrams.toLocaleString('id-ID')} g ({pkgPreview.kgText} kg)
+          </span>
+        </div>
+      </div>
     </Drawer>
   )
 }
@@ -499,6 +654,19 @@ export function ItemDetailPage() {
               ['Stasiun Temu', `St. ${item.station}`],
               ['Waktu Temu', item.found],
               ['Sisa Masa Simpan', `${item.expiresIn} hari`],
+              [
+                'Berat & Dimensi',
+                (() => {
+                  const m = calcPackageMetrics({
+                    weightGrams: item.weightGrams,
+                    lengthCm: item.lengthCm,
+                    widthCm: item.widthCm,
+                    heightCm: item.heightCm,
+                  })
+                  return `${m.actualGrams.toLocaleString('id-ID')} g (${m.actualKgText} kg)${m.dimensionsText ? ` • ${m.dimensionsText}` : ''}`
+                })(),
+              ],
+              ['Estimasi Nilai', rupiah(item.estimatedValue ?? 250000)],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="text-xs text-muted">{k}</dt>

@@ -45,6 +45,7 @@ return [
         'client_key' => env('MIDTRANS_CLIENT_KEY'),
         'signature_key' => env('MIDTRANS_SIGNATURE_KEY'),
         'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
+        'override_amount' => env('PAYMENT_OVERRIDE_AMOUNT') ? (int) env('PAYMENT_OVERRIDE_AMOUNT') : null,
     ],
 
     'shipping' => [

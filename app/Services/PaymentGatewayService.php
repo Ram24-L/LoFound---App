@@ -20,6 +20,13 @@ class PaymentGatewayService
         return (bool) config('services.midtrans.is_production', false);
     }
 
+    public function overrideAmount(): ?int
+    {
+        $val = config('services.midtrans.override_amount');
+
+        return is_numeric($val) && (int) $val > 0 ? (int) $val : null;
+    }
+
     public function clientKey(): ?string
     {
         $key = config('services.midtrans.client_key');

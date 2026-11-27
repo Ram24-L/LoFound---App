@@ -92,10 +92,11 @@ class LaporanBarangHilang extends Model
      */
     public function toReportArray(): array
     {
-        $this->loadMissing(['items.kategori', 'riwayat', 'stasiunDari', 'stasiunKe', 'pencocokan', 'klaim']);
+        $this->loadMissing(['items.kategori', 'riwayat', 'stasiunDari', 'stasiunKe', 'pencocokan.barangTemuan', 'klaim.barangTemuan']);
 
         $latestKlaim = $this->klaim->sortByDesc('id')->first();
         $latestBast  = $latestKlaim ? BastPengambilan::where('klaim_id', $latestKlaim->id)->latest()->first() : null;
+        $foundItem   = $latestKlaim?->barangTemuan ?? $this->pencocokan->first()?->barangTemuan;
 
         return [
             'id'         => $this->kode,
@@ -138,6 +139,11 @@ class LaporanBarangHilang extends Model
             'biteshipOrderId'    => $latestBast?->biteship_order_id,
             'biteshipTrackingId' => $latestBast?->biteship_tracking_id,
             'trackingHistory'    => $latestBast?->tracking_history ?? [],
+            'packageWeightGrams' => $foundItem ? (int) ($foundItem->berat_gram ?? 1000) : null,
+            'packageLengthCm'    => $foundItem?->panjang_cm ? (int) $foundItem->panjang_cm : null,
+            'packageWidthCm'     => $foundItem?->lebar_cm ? (int) $foundItem->lebar_cm : null,
+            'packageHeightCm'    => $foundItem?->tinggi_cm ? (int) $foundItem->tinggi_cm : null,
+            'packageValue'       => $foundItem ? (int) ($foundItem->estimasi_nilai ?? 250000) : null,
         ];
     }
 }

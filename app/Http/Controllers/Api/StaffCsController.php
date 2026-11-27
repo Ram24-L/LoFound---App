@@ -87,14 +87,19 @@ class StaffCsController extends Controller
     public function storeFoundItem(Request $request)
     {
         $request->validate([
-            'cat'     => 'required|string',
-            'name'    => 'required|string|min:3',
-            'color'   => 'nullable|string',
-            'station' => 'required|string',
-            'detail'  => 'nullable|string',
-            'serial'  => 'nullable|string',
-            'locker'  => 'nullable|string',
-            'notes'   => 'nullable|string',
+            'cat'             => 'required|string',
+            'name'            => 'required|string|min:3',
+            'color'           => 'nullable|string',
+            'station'         => 'required|string',
+            'detail'          => 'nullable|string',
+            'serial'          => 'nullable|string',
+            'locker'          => 'nullable|string',
+            'notes'           => 'nullable|string',
+            'weight_grams'    => 'nullable|integer|min:50|max:50000',
+            'length_cm'       => 'nullable|integer|min:1|max:300',
+            'width_cm'        => 'nullable|integer|min:1|max:300',
+            'height_cm'       => 'nullable|integer|min:1|max:300',
+            'estimated_value' => 'nullable|integer|min:1000|max:100000000',
         ]);
 
         $user = $request->user();
@@ -129,6 +134,11 @@ class StaffCsController extends Controller
             'foto_barang'       => $request->input('photo_url') ?? $request->input('foto_barang'),
             'status_simpan'     => 'Tersimpan',
             'expires_in'        => $kategori->retention_days ?? 30,
+            'berat_gram'        => $request->filled('weight_grams') ? (int) $request->input('weight_grams') : 1000,
+            'panjang_cm'        => $request->filled('length_cm') ? (int) $request->input('length_cm') : null,
+            'lebar_cm'          => $request->filled('width_cm') ? (int) $request->input('width_cm') : null,
+            'tinggi_cm'         => $request->filled('height_cm') ? (int) $request->input('height_cm') : null,
+            'estimasi_nilai'    => $request->filled('estimated_value') ? (int) $request->input('estimated_value') : 250000,
             'secret'            => [
                 'detail' => $request->detail ?? '',
                 'serial' => $request->serial ?? '-',
@@ -203,12 +213,20 @@ class StaffCsController extends Controller
      */
     public function updateFoundItem(Request $request, string $kode)
     {
+        $request->validate([
+            'weight_grams'    => 'nullable|integer|min:50|max:50000',
+            'length_cm'       => 'nullable|integer|min:1|max:300',
+            'width_cm'        => 'nullable|integer|min:1|max:300',
+            'height_cm'       => 'nullable|integer|min:1|max:300',
+            'estimated_value' => 'nullable|integer|min:1000|max:100000000',
+        ]);
+
         $bt = BarangTemuan::where('kode', $kode)->firstOrFail();
         $user = $request->user();
 
         $claimLocked = $bt->status_simpan === 'Dalam Klaim';
 
-        $fields = ['notes' => $request->notes];
+        $fields = [];
         if (!$claimLocked) {
             if ($request->has('cat')) {
                 $kat = KategoriBarang::where('nama', $request->cat)->first();
@@ -220,6 +238,23 @@ class StaffCsController extends Controller
                 $st = Stasiun::where('nama', $request->station)->first();
                 if ($st) $fields['stasiun_temuan_id'] = $st->id;
             }
+        }
+
+        // Shipping dimensions & value may always be weighed/updated before shipment
+        if ($request->exists('weight_grams') && $request->filled('weight_grams')) {
+            $fields['berat_gram'] = (int) $request->input('weight_grams');
+        }
+        if ($request->exists('length_cm')) {
+            $fields['panjang_cm'] = $request->filled('length_cm') ? (int) $request->input('length_cm') : null;
+        }
+        if ($request->exists('width_cm')) {
+            $fields['lebar_cm'] = $request->filled('width_cm') ? (int) $request->input('width_cm') : null;
+        }
+        if ($request->exists('height_cm')) {
+            $fields['tinggi_cm'] = $request->filled('height_cm') ? (int) $request->input('height_cm') : null;
+        }
+        if ($request->exists('estimated_value') && $request->filled('estimated_value')) {
+            $fields['estimasi_nilai'] = (int) $request->input('estimated_value');
         }
 
         // Update secret fields
@@ -618,16 +653,21 @@ class StaffCsController extends Controller
     private function mapInventoryItem(BarangTemuan $bt): array
     {
         return [
-            'id'        => $bt->id,
-            'code'      => $bt->kode,
-            'cat'       => $bt->kategori?->nama ?? '',
-            'name'      => $bt->nama_barang,
-            'color'     => $bt->warna,
-            'station'   => $bt->stasiunTemuan?->nama ?? '',
-            'found'     => $bt->tanggal_temuan?->format('j M Y') . ', ' . ($bt->waktu_temuan ?? ''),
-            'status'    => $bt->status_simpan,
-            'expiresIn' => $bt->expires_in,
-            'secret'    => $bt->secret ?? ['detail' => '', 'serial' => '-', 'locker' => '', 'notes' => ''],
+            'id'             => $bt->id,
+            'code'           => $bt->kode,
+            'cat'            => $bt->kategori?->nama ?? '',
+            'name'           => $bt->nama_barang,
+            'color'          => $bt->warna,
+            'station'        => $bt->stasiunTemuan?->nama ?? '',
+            'found'          => $bt->tanggal_temuan?->format('j M Y') . ', ' . ($bt->waktu_temuan ?? ''),
+            'status'         => $bt->status_simpan,
+            'expiresIn'      => $bt->expires_in,
+            'weightGrams'    => (int) ($bt->berat_gram ?? 1000),
+            'lengthCm'       => $bt->panjang_cm ? (int) $bt->panjang_cm : null,
+            'widthCm'        => $bt->lebar_cm ? (int) $bt->lebar_cm : null,
+            'heightCm'       => $bt->tinggi_cm ? (int) $bt->tinggi_cm : null,
+            'estimatedValue' => (int) ($bt->estimasi_nilai ?? 250000),
+            'secret'         => $bt->secret ?? ['detail' => '', 'serial' => '-', 'locker' => '', 'notes' => ''],
         ];
     }
 

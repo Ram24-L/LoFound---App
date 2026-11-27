@@ -448,4 +448,184 @@ class BiteshipShippingTest extends TestCase
         $this->assertSame('confirmed', $bast->fresh()->shipping_status);
         $this->assertSame('dikemas', $bast->fresh()->status_bayar);
     }
+
+    public function test_found_item_weight_and_dimensions_drive_biteship_rates_and_order(): void
+    {
+        config()->set('services.biteship.api_key', 'biteship_test.TestKey123');
+
+        [$passenger, $logistik, $laporan, $klaim, $temuan] = $this->seedApprovedScenario();
+        $cs = User::firstOrCreate(
+            ['email' => 'rina.k@kci.id'],
+            [
+                'name'       => 'Rina Kurniasih',
+                'password'   => bcrypt('password'),
+                'role'       => 'cs',
+                'stasiun_id' => $temuan->stasiun_temuan_id,
+            ]
+        );
+
+        // 1. CS creates a new found item with explicit weight, dimensions, and value
+        $createRes = $this->actingAs($cs)->postJson('/api/staff/cs/found-items', [
+            'cat'             => 'Elektronik',
+            'name'            => 'Kamera Mirrorless Fuji',
+            'color'           => 'Hitam',
+            'station'         => 'Jakarta Kota',
+            'weight_grams'    => 1800,
+            'length_cm'       => 30,
+            'width_cm'        => 20,
+            'height_cm'       => 15,
+            'estimated_value' => 8500000,
+        ]);
+        $createRes->assertOk()
+            ->assertJsonPath('item.weightGrams', 1800)
+            ->assertJsonPath('item.lengthCm', 30)
+            ->assertJsonPath('item.widthCm', 20)
+            ->assertJsonPath('item.heightCm', 15)
+            ->assertJsonPath('item.estimatedValue', 8500000);
+
+        // 2. CS weighs & measures an item that is already Dalam Klaim
+        $updateRes = $this->actingAs($cs)->patchJson("/api/staff/cs/found-items/{$temuan->kode}", [
+            'weight_grams'    => 2500,
+            'length_cm'       => 40,
+            'width_cm'        => 30,
+            'height_cm'       => 20,
+            'estimated_value' => 5000000,
+        ]);
+        $updateRes->assertOk()
+            ->assertJsonPath('item.weightGrams', 2500)
+            ->assertJsonPath('item.lengthCm', 40)
+            ->assertJsonPath('item.estimatedValue', 5000000);
+
+        Http::fake([
+            'https://api.biteship.com/v1/rates/couriers' => Http::response([
+                'success' => true,
+                'pricing' => [
+                    [
+                        'courier_name'            => 'JNE',
+                        'courier_code'            => 'jne',
+                        'courier_service_name'    => 'REG',
+                        'courier_service_code'    => 'reg',
+                        'shipment_duration_range' => '1 - 2',
+                        'shipment_duration_unit'  => 'days',
+                        'price'                   => 36000,
+                    ],
+                ],
+            ], 200),
+            'https://api.biteship.com/v1/orders' => Http::response([
+                'success' => true,
+                'id'      => 'bshp-order-dim-951',
+                'status'  => 'confirmed',
+                'courier' => [
+                    'tracking_id' => 'bshp-track-dim-951',
+                    'waybill_id'  => 'JNEDIM951',
+                ],
+            ], 200),
+        ]);
+
+        // 3. Rates query uses the found item's exact weight, dimensions, and value (volumetric = 40*30*20/6000 = 4000 g)
+        $ratesRes = $this->actingAs($passenger)->postJson('/api/shipping/rates', [
+            'postal_code' => '16143',
+            'report_code' => $laporan->kode,
+        ]);
+        $ratesRes->assertOk()
+            ->assertJsonPath('package.weight_grams', 2500)
+            ->assertJsonPath('package.volumetric_grams', 4000)
+            ->assertJsonPath('package.chargeable_grams', 4000)
+            ->assertJsonPath('package.length_cm', 40)
+            ->assertJsonPath('package.estimated_value', 5000000);
+
+        Http::assertSent(function ($req) {
+            if (! str_contains($req->url(), '/rates/couriers')) {
+                return false;
+            }
+            $item = $req['items'][0] ?? [];
+
+            return ($item['weight'] ?? null) === 2500
+                && ($item['length'] ?? null) === 40
+                && ($item['width'] ?? null) === 30
+                && ($item['height'] ?? null) === 20
+                && ($item['value'] ?? null) === 5000000;
+        });
+
+        // 4. Logistics order creation passes those exact dimensions and weight to Biteship /orders
+        $bast = BastPengambilan::create([
+            'kode'                    => 'BAST-2026-954',
+            'klaim_id'                => $klaim->id,
+            'metode_ambil'            => 'ekspedisi',
+            'alamat_kirim'            => 'Jl. Pajajaran No. 12, Bogor Tengah, 16143',
+            'destination_postal_code' => '16143',
+            'recipient_name'          => 'M. Ramdhan Maulana',
+            'recipient_phone'         => '081234567890',
+            'kurir'                   => 'JNE REG',
+            'courier_company'         => 'jne',
+            'courier_type'            => 'reg',
+            'ongkir'                  => 43500,
+            'status_bayar'            => 'lunas',
+        ]);
+
+        $this->actingAs($logistik)->postJson("/api/staff/logistics/shipments/{$bast->id}/ship", [
+            'awb'    => '',
+            'action' => 'pack',
+        ])->assertOk()->assertJsonPath('awb', 'JNEDIM951');
+
+        Http::assertSent(function ($req) {
+            if (! str_contains($req->url(), '/v1/orders')) {
+                return false;
+            }
+            $item = $req['items'][0] ?? [];
+
+            return ($item['weight'] ?? null) === 2500
+                && ($item['length'] ?? null) === 40
+                && ($item['width'] ?? null) === 30
+                && ($item['height'] ?? null) === 20
+                && ($item['value'] ?? null) === 5000000;
+        });
+    }
+
+    public function test_payment_override_amount_overrides_checkout_and_midtrans_gross_amount(): void
+    {
+        config()->set('services.midtrans.server_key', 'SB-Mid-server-TestKey123');
+        config()->set('services.midtrans.client_key', 'SB-Mid-client-TestKey123');
+        config()->set('services.midtrans.override_amount', 1);
+        config()->set('services.biteship.api_key', null);
+
+        $this->getJson('/api/payment/config')
+            ->assertOk()
+            ->assertJsonPath('override_amount', 1);
+
+        [$passenger, , $laporan] = $this->seedApprovedScenario();
+
+        Http::fake([
+            'https://app.sandbox.midtrans.com/snap/v1/transactions' => Http::response([
+                'token'        => 'snap-override-1',
+                'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v4/redirection/snap-override-1',
+            ], 201),
+        ]);
+
+        $res = $this->actingAs($passenger)->postJson("/api/reports/{$laporan->kode}/bast", [
+            'method'          => 'ekspedisi',
+            'courier'         => 'JNE Reguler',
+            'courier_company' => 'jne',
+            'courier_type'    => 'reg',
+            'address'         => 'Jl. Pajajaran No. 12',
+            'city'            => 'Bogor Tengah',
+            'zip'             => '16143',
+            'name'            => 'M. Ramdhan',
+            'wa'              => '081234567890',
+            'insure'          => true,
+        ]);
+
+        $res->assertOk()
+            ->assertJsonPath('report.shippingAmount', 1);
+
+        Http::assertSent(function ($req) {
+            if (! str_contains($req->url(), 'snap/v1/transactions')) {
+                return false;
+            }
+            $gross = $req['transaction_details']['gross_amount'] ?? null;
+            $items = $req['item_details'] ?? [];
+
+            return $gross === 1 && count($items) === 1 && ($items[0]['price'] ?? null) === 1;
+        });
+    }
 }

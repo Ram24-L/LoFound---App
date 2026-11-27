@@ -63,6 +63,11 @@ class StaffLogisticsController extends Controller
                     'biteship_tracking_id'    => $bast->biteship_tracking_id,
                     'shipping_status'         => $bast->shipping_status,
                     'tracking_history'        => $bast->tracking_history ?? [],
+                    'weight_grams'            => $barang ? (int) ($barang->berat_gram ?? 1000) : 1000,
+                    'length_cm'               => $barang?->panjang_cm ? (int) $barang->panjang_cm : null,
+                    'width_cm'                => $barang?->lebar_cm ? (int) $barang->lebar_cm : null,
+                    'height_cm'               => $barang?->tinggi_cm ? (int) $barang->tinggi_cm : null,
+                    'estimated_value'         => $barang ? (int) ($barang->estimasi_nilai ?? 250000) : 250000,
                 ];
             });
 

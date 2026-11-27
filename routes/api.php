@@ -34,6 +34,7 @@ Route::get('/payment/config', function (PaymentGatewayService $pg) {
         'is_production'     => $pg->isProduction(),
         'client_key'        => $pg->clientKey(),
         'snap_js_url'       => $pg->snapJsUrl(),
+        'override_amount'   => $pg->overrideAmount(),
     ]);
 });
 
