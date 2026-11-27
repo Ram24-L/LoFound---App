@@ -279,7 +279,7 @@ class MidtransShippingTest extends TestCase
         $this->assertSame('gagal', $bast->fresh()->status_bayar);
         $this->assertSame('bast', $laporan->fresh()->status);
 
-        // Endpoint health check (GET) and Midtrans Dashboard Test Notification
+        // Endpoint health check (GET) and Midtrans Dashboard Test Notification (valid & dummy signature)
         $this->getJson('/api/webhooks/payment')->assertOk()->assertJsonPath('ok', true);
         $testOrderId = 'payment_notif_test_12345';
         $testSig = hash('sha512', $testOrderId . '200' . '10000.00' . 'SB-Mid-server-TestKey123');
@@ -289,7 +289,19 @@ class MidtransShippingTest extends TestCase
             'gross_amount'       => '10000.00',
             'transaction_status' => 'settlement',
             'signature_key'      => $testSig,
-        ])->assertOk()->assertJsonPath('test', true);
+        ])->assertOk()
+            ->assertJsonPath('test', true)
+            ->assertJsonPath('signature_valid', true);
+
+        $this->postJson('/api/webhooks/payment', [
+            'order_id'           => $testOrderId,
+            'status_code'        => '200',
+            'gross_amount'       => '105000.00',
+            'transaction_status' => 'settlement',
+            'signature_key'      => 'dummy-dashboard-test-signature',
+        ])->assertOk()
+            ->assertJsonPath('test', true)
+            ->assertJsonPath('signature_valid', false);
     }
 
     public function test_shipping_checkout_returns_502_when_midtrans_api_rejects_request(): void

@@ -29,7 +29,29 @@ class WebhookController extends Controller
         $grossAmount = (string) $request->input('gross_amount', '');
         $signatureKey = (string) $request->input('signature_key', '');
 
-        if (! $pg->verifyMidtransSignature($orderId, $statusCode, $grossAmount, $signatureKey)) {
+        $sigValid = $pg->verifyMidtransSignature($orderId, $statusCode, $grossAmount, $signatureKey);
+
+        if (str_starts_with($orderId, 'payment_notif_test_')) {
+            Log::info('Midtrans test webhook acknowledged', [
+                'order_id'        => $orderId,
+                'merchant_id'     => $request->input('merchant_id'),
+                'signature_valid' => $sigValid,
+            ]);
+
+            return response()->json([
+                'ok'              => true,
+                'test'            => true,
+                'signature_valid' => $sigValid,
+            ]);
+        }
+
+        if (! $sigValid) {
+            Log::warning('Midtrans webhook invalid signature', [
+                'order_id'     => $orderId,
+                'status_code'  => $statusCode,
+                'gross_amount' => $grossAmount,
+            ]);
+
             return response()->json(['message' => 'Invalid payment signature.'], 403);
         }
 
@@ -39,12 +61,6 @@ class WebhookController extends Controller
             ->first();
 
         if (! $bast) {
-            if (str_starts_with($orderId, 'payment_notif_test_')) {
-                Log::info('Midtrans test webhook acknowledged', ['order_id' => $orderId]);
-
-                return response()->json(['ok' => true, 'test' => true]);
-            }
-
             return response()->json(['message' => 'Order not found.'], 404);
         }
 
