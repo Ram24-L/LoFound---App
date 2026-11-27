@@ -302,6 +302,22 @@ class MidtransShippingTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('test', true)
             ->assertJsonPath('signature_valid', false);
+
+        // Separate Signature Secret Key (newer Midtrans merchant accounts) must also validate real webhooks
+        config()->set('services.midtrans.signature_key', 'Separate-Signature-Secret-Key');
+        $bast->update(['status_bayar' => 'pending']);
+        $sigWithSecret = hash('sha512', $bast->midtrans_order_id . '200' . '18500.00' . 'Separate-Signature-Secret-Key');
+        $this->postJson('/api/webhooks/payment', [
+            'order_id'           => $bast->midtrans_order_id,
+            'status_code'        => '200',
+            'gross_amount'       => '18500.00',
+            'transaction_status' => 'settlement',
+            'payment_type'       => 'qris',
+            'signature_key'      => $sigWithSecret,
+        ])->assertOk();
+
+        $this->assertSame('lunas', $bast->fresh()->status_bayar);
+        $this->assertSame('dikirim', $laporan->fresh()->status);
     }
 
     public function test_shipping_checkout_returns_502_when_midtrans_api_rejects_request(): void

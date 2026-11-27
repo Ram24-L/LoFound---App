@@ -339,13 +339,26 @@ class PaymentGatewayService
 
     public function verifyMidtransSignature(string $orderId, string $statusCode, string $grossAmount, string $signatureKey): bool
     {
-        $serverKey = config('services.midtrans.server_key');
-        if (! $serverKey || ! $signatureKey) {
+        if (! $signatureKey) {
             return false;
         }
 
-        $expected = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $candidateKeys = array_values(array_unique(array_filter([
+            trim((string) config('services.midtrans.signature_key')),
+            trim((string) config('services.midtrans.server_key')),
+        ], fn (string $k) => $k !== '')));
 
-        return hash_equals($expected, $signatureKey);
+        if (count($candidateKeys) === 0) {
+            return false;
+        }
+
+        foreach ($candidateKeys as $key) {
+            $expected = hash('sha512', $orderId . $statusCode . $grossAmount . $key);
+            if (hash_equals($expected, $signatureKey)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
