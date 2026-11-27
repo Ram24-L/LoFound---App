@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Stasiun;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StaffAuthSecurityTest extends TestCase
@@ -127,5 +129,60 @@ class StaffAuthSecurityTest extends TestCase
             ->getJson('/api/staff/auth/user')
             ->assertStatus(200)
             ->assertJsonPath('user', null);
+    }
+
+    public function test_debug_account_has_staff_access_and_can_upload_image_with_tab_token(): void
+    {
+        Storage::fake('public');
+
+        $stasiun = Stasiun::first() ?? Stasiun::create(['kode' => 'JAKK', 'nama' => 'Jakarta Kota', 'lin' => 'Lin Bogor']);
+
+        $debugUser = User::firstOrCreate(
+            ['email' => 'debug.verify@kci.id'],
+            [
+                'name'       => 'Super Debug Verify',
+                'password'   => Hash::make('DebugPass#99'),
+                'role'       => 'debug',
+                'stasiun_id' => $stasiun->id,
+                'active'     => true,
+            ]
+        );
+
+        $login = $this->postJson('/api/staff/auth/login', [
+            'email'    => $debugUser->email,
+            'password' => 'DebugPass#99',
+        ])->assertStatus(200);
+
+        $token = $login->json('token');
+        $this->assertNotEmpty($token);
+
+        // Simulate production environment to ensure Super Debug is not blocked by APP_ENV=production
+        $this->get('/')->assertStatus(200);
+        $this->app->detectEnvironment(fn () => 'production');
+
+        $this->withHeader('X-Tab-Token', $token)
+            ->getJson('/api/staff/cs/dashboard')
+            ->assertStatus(200);
+
+        $this->withHeader('X-Tab-Token', $token)
+            ->getJson('/api/staff/admin/users')
+            ->assertStatus(200);
+
+        $this->withHeaders([
+            'X-Tab-Token'  => $token,
+            'X-CSRF-TOKEN' => csrf_token(),
+        ])->post('/api/upload', [
+            'file'    => UploadedFile::fake()->image('item.jpg'),
+            'purpose' => 'general',
+        ])->assertStatus(200)
+          ->assertJsonStructure(['url', 'filename', 'size']);
+    }
+
+    public function test_welcome_blade_renders_without_syntax_error(): void
+    {
+        $this->get('/')
+            ->assertStatus(200)
+            ->assertSee('<div id="root"></div>', false)
+            ->assertDontSee('window.__LOFOUND_MIDTRANS__', false);
     }
 }

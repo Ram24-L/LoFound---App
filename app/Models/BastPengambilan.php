@@ -10,9 +10,10 @@ class BastPengambilan extends Model
     protected $table = 'bast_pengambilan';
 
     protected $fillable = [
-        'kode', 'klaim_id', 'kode_qr', 'metode_ambil',
+        'kode', 'midtrans_order_id', 'klaim_id', 'kode_qr', 'metode_ambil',
         'stasiun_ambil_id', 'alamat_kirim', 'kurir', 'ongkir',
-        'status_bayar', 'nomor_resi', 'waktu_serah_terima',
+        'status_bayar', 'snap_token', 'payment_url', 'payment_type',
+        'nomor_resi', 'waktu_serah_terima',
     ];
 
     protected function casts(): array

@@ -27,33 +27,22 @@ class WebhookController extends Controller
             return response()->json(['message' => 'Invalid payment signature.'], 403);
         }
 
-        $bast = BastPengambilan::with(['klaim.laporan.user'])->where('kode', $orderId)->firstOrFail();
+        $bast = BastPengambilan::with(['klaim.laporan.user'])
+            ->where('midtrans_order_id', $orderId)
+            ->orWhere('kode', $orderId)
+            ->firstOrFail();
+
         $txStatus = strtolower((string) $request->input('transaction_status', ''));
-        $laporan = $bast->klaim?->laporan;
+        $fraudStatus = $request->input('fraud_status');
+        $paymentType = $request->input('payment_type');
 
-        if (in_array($txStatus, ['settlement', 'capture'])) {
-            $bast->update(['status_bayar' => 'lunas']);
-
-            if ($laporan && $laporan->status !== 'dikirim' && $laporan->status !== 'selesai') {
-                $laporan->update(['status' => 'dikirim']);
-                RiwayatLaporan::create([
-                    'laporan_id' => $laporan->id,
-                    'waktu'      => now()->format('H:i'),
-                    'keterangan' => "Pembayaran ongkir terkonfirmasi ({$bast->kode}). Paket diteruskan ke antrian logistik.",
-                ]);
-                NotificationService::notifyReport(
-                    $laporan,
-                    'Pembayaran Ongkir Diterima',
-                    "Pembayaran ongkir untuk BAST {$bast->kode} telah lunas. Paket Anda sedang disiapkan oleh petugas logistik.",
-                    ['details' => ['Kode BAST' => $bast->kode, 'Status Bayar' => 'Lunas']]
-                );
-            }
-
-            AuditLog::record(null, 'Payment Gateway', 'Webhook pembayaran lunas', $bast->kode);
-        } elseif (in_array($txStatus, ['expire', 'cancel', 'deny'])) {
-            $bast->update(['status_bayar' => 'gagal']);
-            AuditLog::record(null, 'Payment Gateway', "Webhook pembayaran {$txStatus}", $bast->kode);
-        }
+        $pg->applyPaymentStatus(
+            $bast,
+            $txStatus,
+            is_string($fraudStatus) ? $fraudStatus : null,
+            is_string($paymentType) ? $paymentType : null,
+            'Payment Gateway'
+        );
 
         return response()->json(['ok' => true]);
     }

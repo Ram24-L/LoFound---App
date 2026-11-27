@@ -58,6 +58,6 @@ class User extends Authenticatable
 
     public function isStaff(): bool
     {
-        return in_array($this->role, ['cs', 'logistik', 'admin', 'kepala_stasiun']);
+        return in_array($this->role, ['cs', 'logistik', 'admin', 'kepala_stasiun', 'debug']);
     }
 }

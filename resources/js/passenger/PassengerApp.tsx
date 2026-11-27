@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LogIn, ShieldCheck } from 'lucide-react'
+import { Loader2, LogIn, ShieldCheck } from 'lucide-react'
 import type { Report } from '../lib/data'
-import { authApi, reportApi } from '../lib/api'
+import { authApi, getTabToken, reportApi, setTabToken } from '../lib/api'
 import { Button, Sheet, useToast } from '../lib/ui'
 import { Ctx, type Draft, type PassengerCtx, type Route, type RouteName, type User } from './ctx'
 import { BottomNav, OfflineBanner } from './shell'
@@ -17,6 +17,31 @@ const TAB_ROUTES: RouteName[] = ['home', 'reports', 'profile']
 let keySeq = 1
 
 type Gate = { reason: string; intent: () => void; successMsg?: string; expired?: boolean }
+type ServerPaymentReturn = { reportId?: string; tabToken?: string }
+
+function readPaymentResume(): { reportId?: string; tabToken?: string | null; ts?: number } | null {
+  try {
+    const raw = localStorage.getItem('lofound_payment_resume')
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { reportId?: string; tabToken?: string | null; ts?: number }
+    const isFresh = typeof parsed.ts === 'number' && Date.now() - parsed.ts < 30 * 60 * 1000
+    return isFresh ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function detectPaymentReturnSignal(): boolean {
+  if (typeof window === 'undefined') return false
+  const win = window as Window & { __LOFOUND_PAYMENT_RETURN__?: ServerPaymentReturn }
+  if (win.__LOFOUND_PAYMENT_RETURN__?.reportId) return true
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('payment_return') || params.get('order_id') || params.get('transaction_status')) return true
+  try {
+    if (sessionStorage.getItem('lofound_payment_return')) return true
+  } catch {}
+  return Boolean(readPaymentResume()?.reportId)
+}
 
 export function PassengerApp() {
   const toast = useToast()
@@ -27,21 +52,96 @@ export function PassengerApp() {
   const [unread, setUnread] = useState(0)
   const [gate, setGate] = useState<Gate | null>(null)
   const [loading, setLoading] = useState(true)
+  const [returningPayment, setReturningPayment] = useState<boolean>(() => detectPaymentReturnSignal())
   const [offline, setOffline] = useState(!navigator.onLine)
   const pending = useRef<Gate | null>(null)
 
-  // Check session on mount
+  // Check session on mount and handle redirect return from payment page (StrictMode-safe)
   useEffect(() => {
-    authApi.user()
-      .then(({ user: u }) => {
+    let cancelled = false
+    const win = window as Window & {
+      __LOFOUND_PAYMENT_RETURN__?: ServerPaymentReturn
+    }
+    const serverReturn = win.__LOFOUND_PAYMENT_RETURN__
+    if (serverReturn?.tabToken) {
+      setTabToken('passenger', serverReturn.tabToken)
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const returnKode = params.get('payment_return')
+    const orderIdParam = params.get('order_id')
+    const txStatusParam = params.get('transaction_status')
+    const serverReturnId = serverReturn?.reportId ?? null
+    let savedReturnId: string | null = null
+    try {
+      savedReturnId = sessionStorage.getItem('lofound_payment_return')
+    } catch {}
+    const resumeData = readPaymentResume()
+    const resumeReportId = resumeData?.reportId ?? null
+    if (!getTabToken('passenger') && resumeData?.tabToken) {
+      setTabToken('passenger', resumeData.tabToken)
+    }
+
+    const hasReturnSignal = Boolean(serverReturnId || returnKode || resumeReportId || orderIdParam || txStatusParam || savedReturnId)
+
+    const bootstrap = hasReturnSignal
+      ? Promise.all([authApi.user(), reportApi.list().catch(() => [] as Report[])]).then(([authRes, list]) => ({
+          user: authRes.user,
+          list,
+        }))
+      : authApi.user().then(async ({ user: u }) => ({
+          user: u,
+          list: u ? await reportApi.list().catch(() => [] as Report[]) : ([] as Report[]),
+        }))
+
+    bootstrap
+      .then(({ user: u, list }) => {
+        if (cancelled) return
         if (u) {
           setUser(u)
-          // Fetch reports for logged-in user
-          return reportApi.list().then(setReports)
+          setReports(list)
+          if (hasReturnSignal) {
+            delete win.__LOFOUND_PAYMENT_RETURN__
+            try {
+              sessionStorage.removeItem('lofound_payment_return')
+              localStorage.removeItem('lofound_payment_resume')
+            } catch {}
+            if (window.location.pathname !== '/' || window.location.search) {
+              window.history.replaceState({}, '', '/')
+            }
+            const target =
+              list.find((r) => serverReturnId && r.id === serverReturnId) ||
+              list.find((r) => returnKode && r.id === returnKode) ||
+              list.find((r) => resumeReportId && r.id === resumeReportId) ||
+              list.find((r) => savedReturnId && r.id === savedReturnId) ||
+              list.find((r) => orderIdParam && (r.paymentOrderId === orderIdParam || r.bastCode === orderIdParam))
+            if (target) {
+              setStack([
+                { name: 'home', key: 0 },
+                { name: 'reports', key: keySeq++ },
+                { name: 'shipping', params: { id: target.id, autoSync: true }, key: keySeq++ },
+              ])
+            }
+          }
+        } else {
+          delete win.__LOFOUND_PAYMENT_RETURN__
+          setTabToken('passenger', null)
+          if (window.location.pathname.startsWith('/payment/return')) {
+            window.history.replaceState({}, '', '/')
+          }
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+          setReturningPayment(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Listen for online/offline
@@ -156,14 +256,26 @@ export function PassengerApp() {
     <Ctx.Provider value={ctx}>
       <div className="relative flex h-full flex-col overflow-hidden bg-canvas">
         {offline && <OfflineBanner />}
-        <div className="relative min-h-0 flex-1">
-          {stack.map((r, i) => (
-            <div key={r.key} className="absolute inset-0" hidden={i !== stack.length - 1}>
-              {renderRoute(r)}
+        {returningPayment ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <span className="flex size-14 items-center justify-center rounded-2xl bg-tint text-primary">
+              <Loader2 className="size-7 animate-spin" aria-hidden />
+            </span>
+            <p className="text-base font-bold text-ink">Memuat status pembayaran...</p>
+            <p className="text-xs leading-5 text-muted">Mohon tunggu sebentar</p>
+          </div>
+        ) : (
+          <>
+            <div className="relative min-h-0 flex-1">
+              {stack.map((r, i) => (
+                <div key={r.key} className="absolute inset-0" hidden={i !== stack.length - 1}>
+                  {renderRoute(r)}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {showNav && <BottomNav />}
+            {showNav && <BottomNav />}
+          </>
+        )}
         <LoginGate
           gate={gate}
           hasDraft={!!draft && !user}
@@ -209,7 +321,7 @@ function renderRoute(r: Route) {
     case 'bast':
       return <BastScreen id={p.id} />
     case 'shipping':
-      return <ShippingScreen id={p.id} />
+      return <ShippingScreen id={p.id} autoSync={Boolean(p.autoSync)} />
     case 'notifications':
       return <NotificationsScreen />
     case 'profile':

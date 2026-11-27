@@ -49,6 +49,14 @@ export type Report = {
   bastCode?: string
   qrCode?: string
   awb?: string
+  paymentStatus?: string
+  paymentOrderId?: string
+  snapToken?: string
+  paymentUrl?: string
+  paymentType?: string
+  shippingCourier?: string
+  shippingAmount?: number
+  shippingAddress?: string
 }
 
 export const STATUS_META: Record<ReportStatus, { label: string; tone: 'success' | 'info' | 'coral' | 'warn' | 'danger' | 'neutral'; action?: boolean; locked?: boolean }> = {

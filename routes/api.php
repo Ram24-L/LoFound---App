@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\WebhookController;
 use App\Models\KategoriBarang;
 use App\Models\Stasiun;
+use App\Services\PaymentGatewayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,15 @@ Route::get('/home-stats', [HomeController::class, 'stats']);
 Route::get('/home-feed', [HomeController::class, 'feed']);
 Route::get('/stations', fn () => Stasiun::where('active', true)->orderBy('nama')->get(['id', 'kode', 'nama', 'lin', 'jam_layanan', 'active']));
 Route::get('/categories', fn () => KategoriBarang::where('active', true)->get(['id', 'nama', 'ikon', 'shippable']));
+Route::get('/payment/config', function (PaymentGatewayService $pg) {
+    return response()->json([
+        'enabled'           => $pg->isConfigured() && ! empty($pg->clientKey()),
+        'server_configured' => $pg->isConfigured(),
+        'is_production'     => $pg->isProduction(),
+        'client_key'        => $pg->clientKey(),
+        'snap_js_url'       => $pg->snapJsUrl(),
+    ]);
+});
 
 // Auth (rate limited)
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
@@ -57,6 +67,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/{kode}/candidates', [ReportController::class, 'candidates']);
     Route::post('/reports/{kode}/claim', [ReportController::class, 'claim']);
     Route::post('/reports/{kode}/bast', [ReportController::class, 'bast']);
+    Route::post('/reports/{kode}/bast/sync-payment', [ReportController::class, 'syncPayment']);
+    Route::post('/reports/{kode}/bast/cancel-payment', [ReportController::class, 'cancelPayment']);
 });
 
 /*

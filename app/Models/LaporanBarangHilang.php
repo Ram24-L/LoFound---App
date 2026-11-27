@@ -121,9 +121,17 @@ class LaporanBarangHilang extends Model
             ])->values()->toArray(),
             'updated'    => $this->riwayat->last()?->waktu ?? $this->waktu_kejadian,
             'attempts'   => $this->klaim->count() ?: null,
-            'bastCode'   => $latestBast?->kode,
-            'qrCode'     => $latestBast?->kode_qr ?? $latestBast?->kode,
-            'awb'        => $latestBast?->nomor_resi,
+            'bastCode'        => $latestBast?->kode,
+            'qrCode'          => $latestBast?->kode_qr ?? $latestBast?->kode,
+            'awb'             => $latestBast?->nomor_resi,
+            'paymentStatus'   => $latestBast?->status_bayar,
+            'paymentOrderId'  => $latestBast?->midtrans_order_id ?? $latestBast?->kode,
+            'snapToken'       => $latestBast?->snap_token,
+            'paymentUrl'      => $latestBast?->payment_url,
+            'paymentType'     => $latestBast?->payment_type,
+            'shippingCourier' => $latestBast?->kurir,
+            'shippingAmount'  => $latestBast?->ongkir,
+            'shippingAddress' => $latestBast?->alamat_kirim,
         ];
     }
 }

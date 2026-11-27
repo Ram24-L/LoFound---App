@@ -14,13 +14,38 @@ const STAFF_TOKEN_KEY = 'lofound_staff_token'
 export function setTabToken(kind: 'passenger' | 'staff', token: string | null) {
   if (typeof window === 'undefined') return
   const key = kind === 'staff' ? STAFF_TOKEN_KEY : PASSENGER_TOKEN_KEY
-  if (token) window.sessionStorage.setItem(key, token)
-  else window.sessionStorage.removeItem(key)
+  if (token) {
+    window.sessionStorage.setItem(key, token)
+    if (kind === 'passenger') {
+      try {
+        window.localStorage.setItem(key, token)
+      } catch {}
+    }
+  } else {
+    window.sessionStorage.removeItem(key)
+    if (kind === 'passenger') {
+      try {
+        window.localStorage.removeItem(key)
+      } catch {}
+    }
+  }
 }
 
 export function getTabToken(kind: 'passenger' | 'staff'): string | null {
   if (typeof window === 'undefined') return null
-  return window.sessionStorage.getItem(kind === 'staff' ? STAFF_TOKEN_KEY : PASSENGER_TOKEN_KEY)
+  const key = kind === 'staff' ? STAFF_TOKEN_KEY : PASSENGER_TOKEN_KEY
+  const fromSession = window.sessionStorage.getItem(key)
+  if (fromSession) return fromSession
+  if (kind === 'passenger') {
+    try {
+      const fromLocal = window.localStorage.getItem(key)
+      if (fromLocal) {
+        window.sessionStorage.setItem(key, fromLocal)
+        return fromLocal
+      }
+    } catch {}
+  }
+  return null
 }
 
 async function request<T = unknown>(
@@ -193,21 +218,39 @@ export const homeApi = {
 
 export const uploadApi = {
   upload: async (file: File, purpose: 'ktp' | 'general' = 'general') => {
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('purpose', purpose)
-    const xsrf = getCookie('XSRF-TOKEN')
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    if (xsrf) headers['X-XSRF-TOKEN'] = xsrf
-    const tabToken = getTabToken('passenger') || getTabToken('staff')
-    if (tabToken) headers['X-Tab-Token'] = tabToken
+    const buildHeaders = () => {
+      const headers: Record<string, string> = { Accept: 'application/json' }
+      const metaCsrf = typeof document !== 'undefined'
+        ? document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content
+        : null
+      if (metaCsrf) headers['X-CSRF-TOKEN'] = metaCsrf
+      const xsrf = getCookie('XSRF-TOKEN')
+      if (xsrf) headers['X-XSRF-TOKEN'] = xsrf
+      const isStaffPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/staff')
+      const tabToken = isStaffPage
+        ? (getTabToken('staff') || getTabToken('passenger'))
+        : (getTabToken('passenger') || getTabToken('staff'))
+      if (tabToken) headers['X-Tab-Token'] = tabToken
+      return headers
+    }
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      headers,
-      credentials: 'same-origin',
-      body: fd,
-    })
+    const sendUpload = () => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('purpose', purpose)
+      return fetch('/api/upload', {
+        method: 'POST',
+        headers: buildHeaders(),
+        credentials: 'same-origin',
+        body: fd,
+      })
+    }
+
+    let res = await sendUpload()
+    if (res.status === 419) {
+      await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' }).catch(() => {})
+      res = await sendUpload()
+    }
     if (!res.ok) throw await parseError(res)
     return res.json() as Promise<{ url: string; filename: string; size: string }>
   },
@@ -235,7 +278,29 @@ export const reportApi = {
   claim: (kode: string, data: { candidates: string[]; answers: Record<string, string>; nik?: string; ktp_url?: string }) =>
     api.post<{ report: Report }>(`/api/reports/${kode}/claim`, data),
   bast: (kode: string, data: Record<string, unknown>) =>
-    api.post<{ bast: string; qr: string; payment_url?: string | null; snap_token?: string | null; report: Report }>(`/api/reports/${kode}/bast`, data),
+    api.post<{
+      bast: string
+      qr: string
+      order_id?: string
+      payment_url?: string | null
+      snap_token?: string | null
+      midtrans_mode?: 'production' | 'sandbox' | 'simulation'
+      report: Report
+    }>(`/api/reports/${kode}/bast`, data),
+  syncPayment: (kode: string) =>
+    api.post<{
+      payment_status: 'lunas' | 'pending' | 'gagal'
+      transaction_status: string
+      payment_type?: string | null
+      message?: string
+      report: Report
+    }>(`/api/reports/${kode}/bast/sync-payment`),
+  cancelPayment: (kode: string) =>
+    api.post<{
+      ok: boolean
+      message?: string
+      report: Report
+    }>(`/api/reports/${kode}/bast/cancel-payment`),
   notifications: () =>
     api.get<Array<{ id: number; report_id: string; title: string; body: string; t: string; unread: boolean }>>('/api/notifications'),
 }

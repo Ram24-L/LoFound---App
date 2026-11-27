@@ -568,6 +568,7 @@ class ReportController
         ];
 
         $snap = null;
+        $midtransMode = 'simulation';
 
         if ($method === 'stasiun') {
             $bastData['stasiun_ambil_id'] = $laporan->stasiunKe->id;
@@ -585,7 +586,10 @@ class ReportController
                 'Pos Indonesia'  => 14000,
                 default          => 18000,
             };
-            $ongkir = $basePrice + ($request->boolean('insure') ? 5000 : 0) + 2500;
+            $insure = $request->boolean('insure');
+            $insureFee = $insure ? 5000 : 0;
+            $adminFee = 2500;
+            $ongkir = $basePrice + $insureFee + $adminFee;
 
             $bastData['alamat_kirim'] = implode(', ', array_filter([
                 $request->input('address'),
@@ -597,22 +601,79 @@ class ReportController
 
             $pg = app(PaymentGatewayService::class);
             if ($pg->isConfigured()) {
+                $midtransMode = $pg->isProduction() ? 'production' : 'sandbox';
+                $orderId = $pg->generateOrderId($bastData['kode']);
+
+                $itemDetails = [
+                    [
+                        'id'       => 'ONGKIR',
+                        'price'    => $basePrice,
+                        'quantity' => 1,
+                        'name'     => substr("Ongkos Kirim {$courier}", 0, 50),
+                    ],
+                ];
+                if ($insureFee > 0) {
+                    $itemDetails[] = [
+                        'id'       => 'INSURANCE',
+                        'price'    => $insureFee,
+                        'quantity' => 1,
+                        'name'     => 'Proteksi Asuransi Pengiriman',
+                    ];
+                }
+                $itemDetails[] = [
+                    'id'       => 'ADMIN_FEE',
+                    'price'    => $adminFee,
+                    'quantity' => 1,
+                    'name'     => 'Biaya Layanan LoFound',
+                ];
+
                 $tempBast = $existingBast ?? new BastPengambilan($bastData);
                 $tempBast->kode = $bastData['kode'];
                 $tempBast->ongkir = $ongkir;
-                $snap = $pg->createSnapTransaction($tempBast, [
-                    'name'  => $request->input('name') ?: $request->user()->name,
-                    'wa'    => $request->input('wa') ?: $request->user()->phone,
-                    'email' => $request->user()->email,
-                ]);
-            }
 
-            if ($snap) {
+                $baseUrl = rtrim($request->getSchemeAndHttpHost() ?: (string) config('app.url'), '/');
+                $returnUrl = PaymentGatewayService::buildReturnUrl($baseUrl, $laporan->kode, (int) $request->user()->id);
+
+                $snap = $pg->createSnapTransaction(
+                    $tempBast,
+                    [
+                        'name'  => $request->input('name') ?: $request->user()->name,
+                        'wa'    => $request->input('wa') ?: $request->user()->phone,
+                        'email' => $request->user()->email,
+                    ],
+                    [
+                        'order_id'     => $orderId,
+                        'item_details' => $itemDetails,
+                        'pay_method'   => $request->input('pay_method'),
+                        'finish_url'   => $returnUrl,
+                        'unfinish_url' => $returnUrl,
+                        'error_url'    => $returnUrl,
+                        'shipping_address' => [
+                            'first_name'  => $request->input('name') ?: $request->user()->name,
+                            'phone'       => $request->input('wa') ?: $request->user()->phone,
+                            'address'     => (string) $request->input('address', ''),
+                            'city'        => (string) $request->input('city', ''),
+                            'postal_code' => (string) $request->input('zip', ''),
+                        ],
+                    ]
+                );
+
+                if (! ($snap['ok'] ?? false)) {
+                    return response()->json([
+                        'message'       => 'Gagal memproses transaksi pembayaran. Silakan coba lagi.',
+                        'gateway_error' => $snap['error'] ?? null,
+                    ], 502);
+                }
+
+                $bastData['midtrans_order_id'] = $snap['order_id'] ?? $orderId;
+                $bastData['snap_token'] = $snap['token'] ?? null;
+                $bastData['payment_url'] = $snap['redirect_url'] ?? null;
                 $bastData['status_bayar'] = 'pending';
+
                 RiwayatLaporan::create([
                     'laporan_id' => $laporan->id,
                     'waktu'      => now()->format('H:i'),
-                    'keterangan' => 'Menunggu pembayaran ongkir ekspedisi - ' . $courier,
+                    'keterangan' => "Menunggu pembayaran ongkir ekspedisi ({$bastData['kode']}) - {$courier}",
                 ]);
             } else {
                 $bastData['status_bayar'] = 'lunas';
@@ -634,12 +695,123 @@ class ReportController
         }
 
         return response()->json([
-            'bast_id'     => $bast->id,
-            'bast'        => $bast->kode,
-            'qr'          => $bast->kode_qr,
-            'payment_url' => $snap['redirect_url'] ?? null,
-            'snap_token'  => $snap['token'] ?? null,
-            'report'      => $laporan->fresh()->toReportArray(),
+            'bast_id'       => $bast->id,
+            'bast'          => $bast->kode,
+            'qr'            => $bast->kode_qr,
+            'order_id'      => $bast->midtrans_order_id ?? $bast->kode,
+            'payment_url'   => $bast->payment_url,
+            'snap_token'    => $bast->snap_token,
+            'midtrans_mode' => $midtransMode,
+            'report'        => $laporan->fresh()->toReportArray(),
+        ]);
+    }
+
+    /**
+     * POST /api/reports/{kode}/bast/sync-payment — query Midtrans Status API v2 for localhost/popup verification
+     */
+    public function syncPayment(Request $request, string $kode, PaymentGatewayService $pg): JsonResponse
+    {
+        $laporan = LaporanBarangHilang::where('kode', $kode)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $klaim = $laporan->klaim()
+            ->where('status_verifikasi', 'disetujui')
+            ->latest()
+            ->first() ?? $laporan->klaim()->latest()->firstOrFail();
+
+        $bast = BastPengambilan::where('klaim_id', $klaim->id)->latest()->firstOrFail();
+
+        if (in_array($bast->status_bayar, ['lunas', 'selesai'], true)) {
+            return response()->json([
+                'payment_status'     => 'lunas',
+                'transaction_status' => 'settlement',
+                'payment_type'       => $bast->payment_type,
+                'report'             => $laporan->fresh()->toReportArray(),
+            ]);
+        }
+
+        if (! $pg->isConfigured()) {
+            return response()->json([
+                'message' => 'Layanan pembayaran sedang tidak tersedia.',
+            ], 422);
+        }
+
+        $orderId = $bast->midtrans_order_id ?? $bast->kode;
+        $status = $pg->getTransactionStatus($orderId);
+
+        if (! $status || ($status['status_code'] ?? '') === '404') {
+            return response()->json([
+                'payment_status'     => 'pending',
+                'transaction_status' => 'unpaid',
+                'payment_type'       => null,
+                'message'            => 'Pembayaran belum diselesaikan. Silakan selesaikan pembayaran Anda terlebih dahulu.',
+                'report'             => $laporan->fresh()->toReportArray(),
+            ]);
+        }
+
+        $txStatus = strtolower((string) ($status['transaction_status'] ?? 'pending'));
+        $fraudStatus = $status['fraud_status'] ?? null;
+        $paymentType = $status['payment_type'] ?? null;
+
+        $paymentStatus = $pg->applyPaymentStatus(
+            $bast,
+            $txStatus,
+            is_string($fraudStatus) ? $fraudStatus : null,
+            is_string($paymentType) ? $paymentType : null,
+            'Payment Status Sync'
+        );
+
+        return response()->json([
+            'payment_status'     => $paymentStatus,
+            'transaction_status' => $txStatus,
+            'payment_type'       => $paymentType,
+            'report'             => $laporan->fresh()->toReportArray(),
+        ]);
+    }
+
+    /**
+     * POST /api/reports/{kode}/bast/cancel-payment — cancel pending shipping payment so user can recreate
+     */
+    public function cancelPayment(Request $request, string $kode, PaymentGatewayService $pg): JsonResponse
+    {
+        $laporan = LaporanBarangHilang::where('kode', $kode)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $klaim = $laporan->klaim()
+            ->where('status_verifikasi', 'disetujui')
+            ->latest()
+            ->first() ?? $laporan->klaim()->latest()->firstOrFail();
+
+        $bast = BastPengambilan::where('klaim_id', $klaim->id)->latest()->firstOrFail();
+
+        if (in_array($bast->status_bayar, ['lunas', 'selesai'], true)) {
+            return response()->json([
+                'message' => 'Pembayaran sudah lunas dan tidak dapat dibatalkan.',
+            ], 422);
+        }
+
+        if ($pg->isConfigured() && $bast->midtrans_order_id) {
+            $pg->cancelTransaction($bast->midtrans_order_id);
+        }
+
+        $bast->update([
+            'status_bayar' => 'gagal',
+            'snap_token'   => null,
+            'payment_url'  => null,
+        ]);
+
+        RiwayatLaporan::create([
+            'laporan_id' => $laporan->id,
+            'waktu'      => now()->format('H:i'),
+            'keterangan' => "Pembayaran ongkir dibatalkan oleh penumpang untuk dibuat ulang ({$bast->kode})",
+        ]);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Pembayaran berhasil dibatalkan.',
+            'report'  => $laporan->fresh()->toReportArray(),
         ]);
     }
 
