@@ -34,7 +34,7 @@ class HomeController
     {
         // Get completed reports with masked owner names for transparency feed
         return LaporanBarangHilang::where('status', 'selesai')
-            ->with(['items.kategori', 'stasiunDari', 'stasiunKe', 'user'])
+            ->with(['items.kategori', 'stasiunDari', 'stasiunKe', 'user', 'klaim.bast'])
             ->latest('updated_at')
             ->take(10)
             ->get()
@@ -45,15 +45,17 @@ class HomeController
                 $parts   = explode(' ', $name);
                 $initial = mb_substr($parts[0], 0, 1);
                 $masked  = (count($parts) > 1 ? 'Sdr. ' : '') . $initial . '***';
+                $bastCode = $lap->klaim->sortByDesc('id')->first()?->bast?->kode ?? $lap->kode;
 
                 return [
+                    'id'   => $lap->kode,
                     'cat'  => $item?->kategori?->nama ?? 'Lainnya',
                     'item' => $item?->nama_barang ?? '-',
                     'from' => $lap->stasiunDari->nama,
                     'to'   => $lap->stasiunKe->nama,
                     'who'  => $masked,
-                    'bast' => 'KCI-' . str_pad($lap->id, 3, '0', STR_PAD_LEFT),
-                    'when' => $lap->updated_at->diffForHumans(),
+                    'bast' => $bastCode,
+                    'when' => $lap->updated_at->locale('id')->diffForHumans(),
                     'line' => $lap->stasiunDari->lin,
                 ];
             })

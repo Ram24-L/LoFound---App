@@ -14,6 +14,7 @@ import {
   Backpack,
   Banknote,
   Check,
+  ChevronRight,
   CircleCheck,
   Gem,
   Laptop,
@@ -279,7 +280,19 @@ export function RadioDot({ checked }: { checked: boolean }) {
 }
 
 /* ---------- Signature: dashed route connector ---------- */
-function RouteRow({ children, onClick, label, coral }: { children: ReactNode; onClick?: () => void; label?: string; coral?: boolean }) {
+function RouteRow({
+  children,
+  onClick,
+  label,
+  coral,
+  showChevron,
+}: {
+  children: ReactNode
+  onClick?: () => void
+  label?: string
+  coral?: boolean
+  showChevron?: boolean
+}) {
   const inner = (
     <>
       <span className={cx('relative z-10 size-4 shrink-0 rounded-full border-[3px] bg-white', coral ? 'border-coral' : 'border-primary')} />
@@ -287,10 +300,11 @@ function RouteRow({ children, onClick, label, coral }: { children: ReactNode; on
         {label && <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</span>}
         <span className="block truncate text-sm font-bold text-ink">{children}</span>
       </span>
+      {onClick && showChevron && <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />}
     </>
   )
   return onClick ? (
-    <button type="button" onClick={onClick} className="flex min-h-11 w-full items-center gap-3 rounded-xl text-left hover:bg-tint/60">
+    <button type="button" onClick={onClick} className="-mx-1.5 flex min-h-11 w-[calc(100%+12px)] items-center gap-3 rounded-xl px-1.5 text-left transition-colors hover:bg-white/70">
       {inner}
     </button>
   ) : (
@@ -306,6 +320,7 @@ export function RouteConnector({
   gap = 'gap-5',
   onFrom,
   onTo,
+  showChevron,
 }: {
   from: ReactNode
   to: ReactNode
@@ -314,14 +329,15 @@ export function RouteConnector({
   gap?: string
   onFrom?: () => void
   onTo?: () => void
+  showChevron?: boolean
 }) {
   return (
     <div className={cx('relative flex flex-col', gap)}>
       <span aria-hidden className="absolute bottom-[22px] left-[7px] top-[22px] border-l-2 border-dashed border-[#a9cfdf]" />
-      <RouteRow onClick={onFrom} label={fromLabel}>
+      <RouteRow onClick={onFrom} label={fromLabel} showChevron={showChevron}>
         {from}
       </RouteRow>
-      <RouteRow onClick={onTo} label={toLabel} coral>
+      <RouteRow onClick={onTo} label={toLabel} coral showChevron={showChevron}>
         {to}
       </RouteRow>
     </div>
@@ -355,12 +371,12 @@ export const iconLibrary: Record<string, LucideIcon> = {
   Perhiasan: Gem,
   Lainnya: Package,
 }
-export function CategoryBadge({ category, size = 44, tone = 'tint' }: { category: string; size?: number; tone?: 'tint' | 'mint' | 'white' }) {
+export function CategoryBadge({ category, size = 44, tone = 'tint', className }: { category: string; size?: number; tone?: 'tint' | 'mint' | 'white'; className?: string }) {
   const Icon = categoryIcon[category] ?? Package
   return (
     <span
       style={{ width: size, height: size }}
-      className={cx('flex shrink-0 items-center justify-center rounded-2xl', tone === 'mint' ? 'bg-mint text-success' : tone === 'white' ? 'bg-white text-primary' : 'bg-tint text-primary')}
+      className={cx('flex shrink-0 items-center justify-center rounded-2xl', tone === 'mint' ? 'bg-mint text-success' : tone === 'white' ? 'bg-white text-primary' : 'bg-tint text-primary', className)}
       aria-hidden
     >
       <Icon style={{ width: size * 0.46, height: size * 0.46 }} />

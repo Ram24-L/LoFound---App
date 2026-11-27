@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, CalendarClock, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, FileClock, ImageIcon, Info, Lock, LogOut, Trash2, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, ArrowUpDown, CalendarClock, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, FileClock, ImageIcon, Info, Lock, LogOut, Trash2, X } from 'lucide-react'
 import { STATUS_META, type Report } from '../lib/data'
 import { Badge, Banner, Button, CategoryBadge, cx, Dialog, Field, inputCls, Pill, RouteConnector, Sheet, Toggle, useCategories, useToast } from '../lib/ui'
 import { reportApi, uploadApi } from '../lib/api'
 import { useApp, type Draft } from './ctx'
 import { StationPicker } from './Home'
 import { ColorSwatches } from './Reports'
-import { Screen, TopBar } from './shell'
+import { Screen, SectionTitle, TopBar } from './shell'
 
 const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 const MONTHS_FULL_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -44,7 +44,7 @@ export function WizardScreen() {
   const [step, setStep] = useState<1 | 2>(1)
   const [items, setItems] = useState<Item[]>([{ ...EMPTY_ITEM }])
   const [openIdx, setOpenIdx] = useState(0)
-  const [route, setRoute] = useState(() => ({ from: 'Bogor', to: 'Manggarai', date: '', time: '' }))
+  const [route, setRoute] = useState(() => ({ from: '', to: '', date: '', time: '' }))
   const [position, setPosition] = useState('')
   const [secret, setSecret] = useState('')
   const [photo, setPhoto] = useState<{ name: string; size: string } | null>(null)
@@ -86,7 +86,8 @@ export function WizardScreen() {
     if (firstBad >= 0) setOpenIdx(firstBad)
     return Object.keys(er).length === 0
   }
-  const routeErr = route.from === route.to ? 'Stasiun keberangkatan dan tujuan tidak boleh sama.' : ''
+  const routeErr = route.from && route.to && route.from === route.to ? 'Stasiun keberangkatan dan tujuan tidak boleh sama.' : ''
+  const routeReady = Boolean(route.from && route.to && !routeErr)
   const timeErr = route.date === nowDateStr() && route.time && toMin(route.time) > toMin(nowTimeStr()) ? 'Waktu tidak boleh melebihi saat ini.' : ''
 
   const findDupLocal = () =>
@@ -96,6 +97,8 @@ export function WizardScreen() {
         r.from === route.from &&
         r.to === route.to &&
         r.date === route.date &&
+        !!route.time &&
+        !!r.time &&
         Math.abs(toMin(r.time) - toMin(route.time)) <= 120 &&
         r.items.some((ri) => items.some((it) => it.category === ri.category)),
     ) ?? null
@@ -137,6 +140,13 @@ export function WizardScreen() {
   }
 
   const send = () => {
+    if (!route.from || !route.to) {
+      const msg = !route.from ? 'Pilih stasiun keberangkatan terlebih dahulu.' : 'Pilih stasiun tujuan terlebih dahulu.'
+      setErrors((e) => ({ ...e, route: msg }))
+      toast(msg, { tone: 'warn' })
+      setPicker(!route.from ? 'from' : 'to')
+      return
+    }
     if (routeErr) {
       toast(routeErr, { tone: 'danger' })
       return
@@ -320,15 +330,48 @@ export function WizardScreen() {
 
         {step === 2 && (
           <>
-            <section className="rounded-[20px] border border-line bg-white p-4">
-              <p className="mb-2 text-xs font-semibold text-muted">Pilih Rute</p>
-              <RouteConnector gap="gap-2" from={route.from} to={route.to} fromLabel="St. Keberangkatan" toLabel="St. Tujuan" onFrom={() => setPicker('from')} onTo={() => setPicker('to')} />
-              {routeErr && (
+            <section className="rounded-2xl border border-line bg-white p-4">
+              <SectionTitle action={!routeReady ? <span className="text-[11px] font-semibold text-cta">Wajib diisi dulu</span> : undefined}>
+                Pilih Rute <span className="text-cta">*</span>
+              </SectionTitle>
+              <div
+                className={cx(
+                  'flex items-center gap-2 rounded-xl px-3.5 py-3 transition-colors',
+                  errors.route || routeErr ? 'bg-danger-soft/40' : 'bg-tint/60',
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <RouteConnector
+                    gap="gap-4"
+                    from={route.from ? `St. ${route.from}` : <span className="text-muted">Pilih Stasiun Keberangkatan</span>}
+                    to={route.to ? `St. ${route.to}` : <span className="text-muted">Pilih Stasiun Tujuan</span>}
+                    fromLabel="St. Keberangkatan"
+                    toLabel="St. Tujuan"
+                    onFrom={() => setPicker('from')}
+                    onTo={() => setPicker('to')}
+                  />
+                </div>
+                <button
+                  type="button"
+                  aria-label="Tukar rute"
+                  onClick={() => {
+                    touch()
+                    setErrors((e) => ({ ...e, route: '' }))
+                    setRoute((r) => ({ ...r, from: r.to, to: r.from }))
+                  }}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-white text-primary hover:bg-tint"
+                >
+                  <ArrowUpDown className="size-4" aria-hidden />
+                </button>
+              </div>
+              {(errors.route || routeErr) && (
                 <p role="alert" className="mt-2 flex items-center gap-1 text-xs font-medium text-danger">
-                  <AlertCircle className="size-3.5" aria-hidden /> {routeErr}
+                  <AlertCircle className="size-3.5" aria-hidden /> {errors.route || routeErr}
                 </p>
               )}
-              <p className="mb-1.5 mt-3 text-xs font-semibold text-muted">Pilih Tanggal</p>
+              <p className="mb-1.5 mt-3.5 text-xs font-semibold text-muted">
+                Pilih Tanggal <span className="text-cta">*</span>
+              </p>
               <button onClick={() => setDateSheet(true)} className={cx('inline-flex min-h-11 items-center gap-2 rounded-full bg-tint px-4 text-[13px] font-bold', route.date ? 'text-primary' : 'text-muted', timeErr && 'ring-2 ring-danger/70')}>
                 <CalendarClock className="size-4 text-primary" aria-hidden />
                 {route.date ? `${route.date} • ${route.time} WIB` : 'Pilih tanggal'}
@@ -429,11 +472,19 @@ export function WizardScreen() {
 
       <StationPicker
         open={!!picker}
+        title={picker === 'from' ? 'Pilih Stasiun Keberangkatan' : 'Pilih Stasiun Tujuan'}
         onClose={() => setPicker(null)}
         onPick={(v) => {
           touch()
-          setRoute((r) => ({ ...r, [picker!]: v.replace('St. ', '') }))
-          setPicker(null)
+          const picked = v.replace('St. ', '')
+          const current = picker!
+          setErrors((e) => ({ ...e, route: '' }))
+          setRoute((r) => ({ ...r, [current]: picked }))
+          if (current === 'from' && !route.to) {
+            setPicker('to')
+          } else {
+            setPicker(null)
+          }
         }}
       />
 
@@ -509,7 +560,7 @@ export function WizardScreen() {
               onClick={() => {
                 const d = initialDraft.current!
                 if (d?.items?.length) setItems(d.items)
-                if (d?.from && d?.to) setRoute({ from: d.from, to: d.to, date: d.date || nowDateStr(), time: d.time || nowTimeStr() })
+                if (d?.from || d?.to || d?.date || d?.time) setRoute({ from: d.from || '', to: d.to || '', date: d.date || '', time: d.time || '' })
                 setPosition(d?.position || '')
                 setSecret(d?.secret || '')
                 setNotify(d?.notify ?? true)

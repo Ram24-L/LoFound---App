@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, User, X } from 'lucide-react'
-import { FEED, STATUS_META, STATIONS } from '../lib/data'
-import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
+import { useCallback, useEffect, useState } from 'react'
+import { ArrowRight, ArrowUpDown, Bell, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, User, X } from 'lucide-react'
+import { STATUS_META, STATIONS } from '../lib/data'
+import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, LogoMark, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
 import { homeApi } from '../lib/api'
 import { usePwaInstall } from '../lib/pwa'
 import { useApp } from './ctx'
@@ -14,30 +14,47 @@ export function HomeScreen() {
   const pwa = usePwaInstall()
   const CATS = ['Semua Kategori', ...categories]
   const [cat, setCat] = useState('Semua Kategori')
-  const [from, setFrom] = useState('St. Bogor')
-  const [to, setTo] = useState('St. Manggarai')
+  const [from, setFrom] = useState('Semua Stasiun')
+  const [to, setTo] = useState('Semua Stasiun')
   const [picker, setPicker] = useState<'from' | 'to' | null>(null)
   const [howSheet, setHowSheet] = useState(false)
   const [iosSheet, setIosSheet] = useState(false)
   const [feedState, setFeedState] = useState<'normal' | 'loading' | 'empty' | 'error'>('loading')
-  const [feedData, setFeedData] = useState<any[]>(FEED)
+  const [feedData, setFeedData] = useState<any[]>([])
+  const [showAllFeed, setShowAllFeed] = useState(false)
   const [slide, setSlide] = useState(0)
 
-  useEffect(() => {
+  const loadFeed = useCallback((showSkeleton = false) => {
+    if (showSkeleton) setFeedState('loading')
     homeApi.feed()
       .then((data) => {
-        if (data && data.length > 0) setFeedData(data)
+        setFeedData(Array.isArray(data) ? data : [])
         setFeedState('normal')
       })
-      .catch(() => setFeedState('normal'))
+      .catch(() => {
+        setFeedState((cur) => (cur === 'loading' ? 'error' : cur))
+      })
   }, [])
+
+  useEffect(() => {
+    loadFeed(true)
+    const onFocus = () => loadFeed(false)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [loadFeed])
 
   const active = user ? reports.filter((r) => !['selesai', 'dibatalkan', 'kedaluwarsa'].includes(r.status)) : []
   const feed = feedData.filter(
     (f) =>
       (cat === 'Semua Kategori' || f.cat === cat) &&
-      (from === 'Semua Stasiun' ? true : f.from === from.replace('St. ', '')),
+      (from === 'Semua Stasiun' ? true : f.from === from.replace('St. ', '')) &&
+      (to === 'Semua Stasiun' ? true : f.to === to.replace('St. ', '')),
   )
+  const visibleFeed = showAllFeed ? feed : feed.slice(0, 3)
+
+  useEffect(() => {
+    setShowAllFeed(false)
+  }, [cat, from, to])
   const effective = feedState === 'normal' && feed.length === 0 ? 'empty' : feedState
 
   const startReport = () => go('wizard')
@@ -76,40 +93,6 @@ export function HomeScreen() {
 
         <div className="relative z-10 -mt-[72px] flex flex-col gap-3 px-5 pb-6">
           <BentoMetrics onHow={() => setHowSheet(true)} />
-
-          {!pwa.isInstalled && !pwa.dismissed && (pwa.canInstall || pwa.isIosPromptable) && (
-            <div className="flex items-center gap-3 rounded-[20px] border border-[#bfe0ee] bg-white p-3.5 shadow-[0_8px_24px_-16px_rgba(49,143,181,0.4)]">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-primary">
-                <Download className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-ink">Pasang Aplikasi LoFound</p>
-                <p className="text-xs text-muted">Akses lebih cepat dari layar utama tanpa membuka browser.</p>
-              </div>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={async () => {
-                  if (pwa.canInstall) {
-                    const res = await pwa.promptInstall()
-                    if (res === 'accepted') toast('Aplikasi LoFound sedang dipasang.')
-                  } else {
-                    setIosSheet(true)
-                  }
-                }}
-              >
-                Pasang
-              </Button>
-              <button
-                type="button"
-                aria-label="Tutup ajakan pasang aplikasi"
-                onClick={pwa.dismiss}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-tint hover:text-ink"
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </div>
-          )}
 
           {/* Guest draft reminder */}
           {!user && draft && (
@@ -179,11 +162,11 @@ export function HomeScreen() {
           )}
 
           {/* Route filter */}
-          <section className="rounded-[20px] border border-line bg-white p-4" aria-label="Filter rute">
-            <SectionTitle>Riwayat Barang Kembali</SectionTitle>
-            <div className="flex items-center gap-2 rounded-2xl bg-tint/60 p-2 pl-3">
+          <section className="rounded-2xl border border-line bg-white p-4" aria-label="Filter rute">
+            <SectionTitle>Filter Rute &amp; Kategori</SectionTitle>
+            <div className="flex items-center gap-2 rounded-xl bg-tint/60 px-3.5 py-3">
               <div className="flex-1">
-                <RouteConnector gap="gap-1" from={from} to={to} fromLabel="Dari" toLabel="Ke" onFrom={() => setPicker('from')} onTo={() => setPicker('to')} />
+                <RouteConnector gap="gap-4" from={from} to={to} fromLabel="Dari" toLabel="Ke" onFrom={() => setPicker('from')} onTo={() => setPicker('to')} />
               </div>
               <button
                 aria-label="Tukar rute"
@@ -191,9 +174,9 @@ export function HomeScreen() {
                   setFrom(to)
                   setTo(from)
                 }}
-                className="flex size-11 items-center justify-center rounded-full border border-line bg-white text-primary hover:bg-tint"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-white text-primary hover:bg-tint"
               >
-                <ArrowUpDown className="size-5" aria-hidden />
+                <ArrowUpDown className="size-4" aria-hidden />
               </button>
             </div>
             <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 lf-noscroll" role="group" aria-label="Kategori">
@@ -205,73 +188,128 @@ export function HomeScreen() {
             </div>
           </section>
 
+          {!pwa.isInstalled && !pwa.dismissed && (pwa.canInstall || pwa.isIosPromptable) && (
+            <div className="flex items-center gap-3 rounded-[20px] border border-[#bfe0ee] bg-white p-3.5 shadow-[0_8px_24px_-16px_rgba(49,143,181,0.4)]">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 ring-1 ring-line">
+                <LogoMark className="h-full w-full" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-ink">Pasang Aplikasi LoFound</p>
+                <p className="text-xs text-muted">Akses lebih cepat dari layar utama tanpa membuka browser.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Download}
+                className="shrink-0"
+                onClick={async () => {
+                  if (pwa.canInstall) {
+                    const res = await pwa.promptInstall()
+                    if (res === 'accepted') toast('Aplikasi LoFound sedang dipasang.')
+                  } else {
+                    setIosSheet(true)
+                  }
+                }}
+              >
+                Unduh
+              </Button>
+              <button
+                type="button"
+                aria-label="Tutup ajakan pasang aplikasi"
+                onClick={pwa.dismiss}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-tint hover:text-ink"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+          )}
+
           {/* Feed */}
-          <section aria-label="Daftar barang yang sudah kembali" className="flex flex-col gap-2.5">
-            <h3 className="px-1 pt-1 text-[13px] font-bold text-ink">Riwayat barang yang baru saja kembali ke pemiliknya</h3>
-            {effective === 'loading' &&
-              [0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 rounded-[20px] border border-line bg-white p-4">
-                  <Skeleton className="size-11 rounded-2xl" />
-                  <div className="flex flex-1 flex-col gap-2">
+          <section aria-label="Daftar barang yang sudah kembali" className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between px-1 pt-1">
+              <h3 className="text-[13px] font-bold text-ink">Baru Dikembalikan</h3>
+              {effective === 'normal' && (
+                <span className="text-[11px] font-medium tabular-nums text-muted">{feed.length} catatan</span>
+              )}
+            </div>
+            {effective === 'loading' && (
+              <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex flex-col gap-2 px-4 py-3.5">
                     <Skeleton className="h-3.5 w-3/4" />
                     <Skeleton className="h-3 w-1/2" />
+                    <Skeleton className="h-2.5 w-2/3" />
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
             {effective === 'error' && (
-              <div className="rounded-[20px] border border-line bg-white">
-                <ErrorState
-                  title="Gagal memuat riwayat."
-                  onRetry={() => {
-                    setFeedState('loading')
-                    setTimeout(() => setFeedState('normal'), 800)
-                  }}
-                />
+              <div className="rounded-2xl border border-line bg-white">
+                <ErrorState title="Gagal memuat riwayat." onRetry={() => loadFeed(true)} />
               </div>
             )}
             {effective === 'empty' && (
-              <div className="rounded-[20px] border border-line bg-white">
+              <div className="rounded-2xl border border-line bg-white">
                 <EmptyState
                   icon={Search}
-                  title="Belum ada riwayat untuk rute ini."
-                  body="Coba ubah stasiun atau kategori untuk melihat barang lain yang sudah kembali."
+                  title="Belum ada riwayat pengembalian."
+                  body={
+                    feedData.length === 0
+                      ? 'Belum ada laporan berstatus selesai untuk ditampilkan.'
+                      : 'Coba ubah stasiun atau kategori untuk melihat barang lain yang sudah kembali.'
+                  }
                   action={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setCat('Semua Kategori')
-                        setFrom('Semua Stasiun')
-                        setTo('St. Manggarai')
-                        setFeedState('normal')
-                      }}
-                    >
-                      Reset Filter
-                    </Button>
+                    (cat !== 'Semua Kategori' || from !== 'Semua Stasiun' || to !== 'Semua Stasiun') ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCat('Semua Kategori')
+                          setFrom('Semua Stasiun')
+                          setTo('Semua Stasiun')
+                        }}
+                      >
+                        Reset Filter
+                      </Button>
+                    ) : undefined
                   }
                 />
               </div>
             )}
             {effective === 'normal' && (
               <>
-                {feed.map((f) => (
-                  <article key={f.bast} className="flex items-center gap-3 rounded-[20px] border border-line bg-white p-3.5">
-                    <CategoryBadge category={f.cat} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-ink">
-                        {f.item} • St. {f.from} ⟶ St. {f.to}
+                <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+                  {visibleFeed.map((f, idx) => (
+                    <article key={f.id || `${f.bast}-${idx}`} className="px-4 py-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[14px] font-bold leading-5 text-ink">{f.item}</p>
+                        <span className="shrink-0 pt-0.5 text-[11px] font-medium tabular-nums text-soft">
+                          {f.when}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs font-medium text-ink/80">
+                        St. {f.from} &rarr; St. {f.to}
                       </p>
-                      <p className="truncate text-xs text-muted">
-                        {f.who} • BAST #{f.bast} • {f.when}
-                      </p>
-                    </div>
-                    <Badge tone="success" icon={Check}>
-                      Sudah Kembali
-                    </Badge>
-                  </article>
-                ))}
-                <p className="flex items-center justify-center gap-1.5 px-4 text-center text-xs text-muted">
-                  <ShieldCheck className="size-3.5 shrink-0" aria-hidden /> Foto barang tidak ditampilkan demi mencegah penipuan.
+                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                        <span>
+                          {f.who} &middot; <span className="font-mono font-semibold text-ink/75">#{f.bast}</span>
+                        </span>
+                        <span className="font-medium text-soft">{f.cat}</span>
+                      </div>
+                    </article>
+                  ))}
+                  {feed.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllFeed((v) => !v)}
+                      className="flex min-h-11 w-full items-center justify-center bg-[#fafcfd] px-4 py-2.5 text-xs font-bold text-primary hover:bg-tint/60"
+                    >
+                      {showAllFeed ? 'Tampilkan lebih sedikit' : `Lainnya (${feed.length - 3} lagi)`}
+                    </button>
+                  )}
+                </div>
+                <p className="flex items-center justify-center gap-1.5 px-4 pt-1 text-center text-[11px] text-muted">
+                  <ShieldCheck className="size-3.5 shrink-0" aria-hidden /> Foto barang disembunyikan untuk mencegah klaim palsu.
                 </p>
               </>
             )}
@@ -293,7 +331,7 @@ export function HomeScreen() {
           else setTo(v)
           setPicker(null)
         }}
-        allowLines={picker === 'from'}
+        allowLines
       />
 
       <Sheet open={howSheet} onClose={() => setHowSheet(false)} title="Cara kami menghitung">
@@ -338,28 +376,31 @@ export function HomeScreen() {
 
 function BentoMetrics({ onHow }: { onHow: () => void }) {
   const [stats, setStats] = useState<{ total: number; returned: number; ratio: number; in_progress: number } | null>(null)
+  const monthLabel = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date())
 
   useEffect(() => {
-    homeApi.stats()
-      .then((data) => {
-        if (data && data.total !== undefined) setStats(data)
-        else setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 })
-      })
-      .catch(() => setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 }))
+    const loadStats = () => {
+      homeApi.stats()
+        .then((data) => {
+          if (data && data.total !== undefined) setStats(data)
+          else setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 })
+        })
+        .catch(() => setStats({ total: 0, returned: 0, ratio: 0, in_progress: 0 }))
+    }
+    loadStats()
+    window.addEventListener('focus', loadStats)
+    return () => window.removeEventListener('focus', loadStats)
   }, [])
 
   const ratio = useCountUp(stats?.ratio ?? 0, 800, 1)
   const created = useCountUp(stats?.total ?? 0, 800)
   const returned = useCountUp(stats?.returned ?? 0, 800)
   return (
-    <button onClick={onHow} aria-label="Transparansi layanan November 2026. Ketuk untuk melihat cara kami menghitung." className="rounded-[20px] border border-line bg-white p-4 text-left shadow-[0_12px_32px_-18px_rgba(24,54,74,0.45)]">
+    <button onClick={onHow} aria-label={`Transparansi layanan ${monthLabel}. Ketuk untuk melihat cara kami menghitung.`} className="rounded-[20px] border border-line bg-white p-4 text-left shadow-[0_12px_32px_-18px_rgba(24,54,74,0.45)]">
       <div className="mb-3.5 flex items-center gap-2.5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-tint text-primary">
-          <ShieldCheck className="size-[18px]" aria-hidden />
-        </span>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-[13px] font-bold text-ink">Transparansi Layanan</p>
-          <p className="text-[11px] font-medium text-muted">November 2026</p>
+          <p className="text-[11px] font-medium text-muted">{monthLabel}</p>
         </div>
         <span className="flex items-center gap-1.5 rounded-full bg-mint px-2.5 py-1 text-[10px] font-bold tracking-wide text-[#1f7a4a]">
           <span className="lf-live size-2 rounded-full bg-success" aria-hidden />
@@ -414,13 +455,27 @@ function BentoMetrics({ onHow }: { onHow: () => void }) {
   )
 }
 
-export function StationPicker({ open, onClose, onPick, allowLines }: { open: boolean; onClose: () => void; onPick: (v: string) => void; allowLines?: boolean }) {
+export function StationPicker({
+  open,
+  onClose,
+  onPick,
+  allowLines,
+  title = 'Pilih Stasiun',
+}: {
+  open: boolean
+  onClose: () => void
+  onPick: (v: string) => void
+  allowLines?: boolean
+  title?: string
+}) {
   const [q, setQ] = useState('')
   const [selectedLine, setSelectedLine] = useState('Semua Lin')
   const [dynamicStations, setDynamicStations] = useState(STATIONS)
 
   useEffect(() => {
     if (!open) return
+    setQ('')
+    setSelectedLine('Semua Lin')
     fetch('/api/stations', { headers: { Accept: 'application/json' } })
       .then((r) => r.json())
       .then((data) => {
@@ -435,7 +490,7 @@ export function StationPicker({ open, onClose, onPick, allowLines }: { open: boo
         }
       })
       .catch(() => {})
-  }, [open])
+  }, [open, title])
 
   const lines = ['Semua Lin', ...new Set(dynamicStations.map((s) => s.line))]
   const list = dynamicStations.filter(
@@ -445,7 +500,7 @@ export function StationPicker({ open, onClose, onPick, allowLines }: { open: boo
   )
 
   return (
-    <Sheet open={open} onClose={onClose} title="Pilih Stasiun">
+    <Sheet open={open} onClose={onClose} title={title}>
       <label className="sr-only" htmlFor="st-search">
         Cari stasiun
       </label>
