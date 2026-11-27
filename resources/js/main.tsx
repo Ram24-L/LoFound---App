@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
+import { registerServiceWorker } from './lib/pwa.ts'
 import './index.css'
+
+registerServiceWorker()
 
 if (typeof Node === 'function' && Node.prototype) {
   const originalRemoveChild = Node.prototype.removeChild

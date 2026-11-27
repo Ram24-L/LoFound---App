@@ -1,0 +1,33 @@
+{
+  "name": "LoFound — KRL Lost & Found",
+  "short_name": "LoFound",
+  "description": "Layanan resmi pelaporan, pelacakan, klaim, dan pengiriman barang tertinggal di KRL Commuter Line.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef5f8",
+  "theme_color": "#318FB5",
+  "lang": "id",
+  "categories": ["travel", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

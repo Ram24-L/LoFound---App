@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, FileClock, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, X } from 'lucide-react'
 import { FEED, STATUS_META, STATIONS } from '../lib/data'
-import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp } from '../lib/ui'
+import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
 import { homeApi } from '../lib/api'
+import { usePwaInstall } from '../lib/pwa'
 import { useApp } from './ctx'
 import { SectionTitle } from './shell'
 
 export function HomeScreen() {
   const { user, go, tab, reports, unread, requireAuth, draft, setDraft } = useApp()
   const { categories } = useCategories()
+  const toast = useToast()
+  const pwa = usePwaInstall()
   const CATS = ['Semua Kategori', ...categories]
   const [cat, setCat] = useState('Semua Kategori')
   const [from, setFrom] = useState('St. Bogor')
   const [to, setTo] = useState('St. Manggarai')
   const [picker, setPicker] = useState<'from' | 'to' | null>(null)
   const [howSheet, setHowSheet] = useState(false)
+  const [iosSheet, setIosSheet] = useState(false)
   const [feedState, setFeedState] = useState<'normal' | 'loading' | 'empty' | 'error'>('loading')
   const [feedData, setFeedData] = useState<any[]>(FEED)
   const [slide, setSlide] = useState(0)
@@ -72,6 +76,40 @@ export function HomeScreen() {
 
         <div className="relative z-10 -mt-[72px] flex flex-col gap-3 px-5 pb-6">
           <BentoMetrics onHow={() => setHowSheet(true)} />
+
+          {!pwa.isInstalled && !pwa.dismissed && (pwa.canInstall || pwa.isIosPromptable) && (
+            <div className="flex items-center gap-3 rounded-[20px] border border-[#bfe0ee] bg-white p-3.5 shadow-[0_8px_24px_-16px_rgba(49,143,181,0.4)]">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-tint text-primary">
+                <Download className="size-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-ink">Pasang Aplikasi LoFound</p>
+                <p className="text-xs text-muted">Akses lebih cepat dari layar utama tanpa membuka browser.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={async () => {
+                  if (pwa.canInstall) {
+                    const res = await pwa.promptInstall()
+                    if (res === 'accepted') toast('Aplikasi LoFound sedang dipasang.')
+                  } else {
+                    setIosSheet(true)
+                  }
+                }}
+              >
+                Pasang
+              </Button>
+              <button
+                type="button"
+                aria-label="Tutup ajakan pasang aplikasi"
+                onClick={pwa.dismiss}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-tint hover:text-ink"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+          )}
 
           {/* Guest draft reminder */}
           {!user && draft && (
@@ -270,6 +308,28 @@ export function HomeScreen() {
             </div>
           ))}
           <p className="text-xs">Data diperbarui setiap 15 menit dari seluruh Posko CS. Tidak ada data pribadi yang ditampilkan.</p>
+        </div>
+      </Sheet>
+
+      <Sheet open={iosSheet} onClose={() => setIosSheet(false)} title="Pasang LoFound di iPhone / iPad">
+        <div className="flex flex-col gap-3 text-sm leading-5 text-muted">
+          <div className="flex items-start gap-3 rounded-2xl bg-tint p-3.5">
+            <Share className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <div>
+              <p className="font-bold text-ink">1. Ketuk ikon Bagikan (Share)</p>
+              <p>Pada bilah bawah Safari, ketuk tombol kotak dengan panah ke atas.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 rounded-2xl bg-tint p-3.5">
+            <Download className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <div>
+              <p className="font-bold text-ink">2. Pilih &ldquo;Tambah ke Layar Utama&rdquo;</p>
+              <p>Gulir daftar aksi lalu ketuk Tambah ke Layar Utama (Add to Home Screen).</p>
+            </div>
+          </div>
+          <Button variant="primary" full onClick={() => setIosSheet(false)}>
+            Mengerti
+          </Button>
         </div>
       </Sheet>
     </div>
