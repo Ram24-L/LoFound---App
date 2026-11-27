@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, ArrowUpDown, Bell, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, User, X } from 'lucide-react'
 import { STATUS_META, STATIONS } from '../lib/data'
-import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, LogoMark, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
+import { Button, cx, EmptyState, ErrorState, inputCls, Logo, LogoMark, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
 import { homeApi } from '../lib/api'
 import { usePwaInstall } from '../lib/pwa'
 import { useApp } from './ctx'
 import { SectionTitle } from './shell'
+
+const STATUS_TEXT_TONE: Record<string, string> = {
+  success: 'text-[#1f7a4a]',
+  info: 'text-primary-dark',
+  coral: 'text-[#b8402f]',
+  warn: 'text-warn',
+  danger: 'text-danger',
+  neutral: 'text-muted',
+  primary: 'text-primary',
+}
 
 export function HomeScreen() {
   const { user, go, tab, reports, unread, requireAuth, draft, setDraft } = useApp()
@@ -119,21 +129,23 @@ export function HomeScreen() {
               <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto lf-noscroll" onScroll={(e) => setSlide(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}>
                 {active.map((r) => {
                   const m = STATUS_META[r.status]
+                  const itemName = r.items?.[0]?.name || 'Barang Dilaporkan'
+                  const extraCount = (r.items?.length ?? 1) - 1
                   return (
                     <button
                       key={r.id}
                       onClick={() => go('tracking', { id: r.id })}
                       className={cx('flex w-full shrink-0 snap-center items-center gap-3 rounded-[20px] bg-white p-4 text-left', m.action ? 'border-2 border-primary' : 'border border-line')}
                     >
-                      <CategoryBadge category={r.items[0].category} />
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Laporan Aktif</p>
-                        <p className="truncate text-sm font-bold text-ink">
-                          #{r.id}: {r.status === 'kandidat' ? 'Kandidat Barang Ditemukan' : m.label}
+                        <p className="mt-0.5 truncate text-sm font-bold text-ink">
+                          {itemName}
+                          {extraCount > 0 ? ` (+${extraCount} barang)` : ''}
                         </p>
-                        <Badge tone={m.tone} className="mt-1.5">
+                        <p className={cx('mt-2.5 text-xs font-semibold', STATUS_TEXT_TONE[m.tone] || 'text-muted')}>
                           {m.label}
-                        </Badge>
+                        </p>
                       </div>
                       <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden />
                     </button>
