@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Clock, Copy, Download, ImageDown, Lock, MapPin, Maximize2, RefreshCw, RotateCcw, ShieldCheck, Store, Truck, Users, X } from 'lucide-react'
 import { Badge, Banner, Button, cx, Field, inputCls, QRCode, RadioDot, RouteConnector, rupiah, Toggle, useAnimatedNumber, useCategories, useToast } from '../lib/ui'
+import type { ShippingRateOption } from '../lib/data'
 import { getTabToken, reportApi } from '../lib/api'
 import { downloadPdfDocument, downloadTicketImage } from '../lib/export'
 import { useApp } from './ctx'
@@ -254,10 +255,10 @@ function MethodCard({ checked, onClick, icon: Icon, title, children, badge, disa
 }
 
 /* ---------------- Shipping & payment ---------------- */
-const COURIERS = [
-  { k: 'KAI Logistik Express', price: 18000, eta: '1–2 hari kerja', tag: 'Tercepat', desc: 'Layanan kilat resmi KAI Logistik' },
-  { k: 'JNE Reguler', price: 16000, eta: '2–3 hari kerja', tag: 'Populer', desc: 'Pengiriman reguler ke seluruh kota' },
-  { k: 'Pos Indonesia', price: 14000, eta: '3–4 hari kerja', tag: 'Hemat', desc: 'Tarif ekonomis & jangkauan luas' },
+const DEFAULT_COURIERS: ShippingRateOption[] = [
+  { k: 'KAI Logistik Express', company: 'kalog', type: 'express', price: 18000, eta: '1–2 hari kerja', tag: 'Tercepat', desc: 'Layanan kilat resmi KAI Logistik', source: 'fallback' },
+  { k: 'JNE Reguler', company: 'jne', type: 'reg', price: 16000, eta: '2–3 hari kerja', tag: 'Populer', desc: 'Pengiriman reguler ke seluruh kota', source: 'fallback' },
+  { k: 'Pos Indonesia', company: 'pos', type: 'reg', price: 14000, eta: '3–4 hari kerja', tag: 'Hemat', desc: 'Tarif ekonomis & jangkauan luas', source: 'fallback' },
 ]
 
 function formatPaymentMethod(paymentType: string | null | undefined): string {
@@ -302,7 +303,9 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
     zip: initialDraft?.f?.zip ?? '',
   }))
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [courier, setCourier] = useState(initialDraft?.courier || r?.shippingCourier || 'KAI Logistik Express')
+  const [couriers, setCouriers] = useState<ShippingRateOption[]>(DEFAULT_COURIERS)
+  const [ratesLoading, setRatesLoading] = useState(false)
+  const [courier, setCourier] = useState(initialDraft?.courier || r?.shippingCourier || DEFAULT_COURIERS[0].k)
   const [insure, setInsure] = useState(() => (typeof initialDraft?.insure === 'boolean' ? initialDraft.insure : true))
   const [phase, setPhase] = useState<'form' | 'paying' | 'pending' | 'paid'>(() => {
     if (r?.status === 'dikirim' || r?.status === 'selesai') return 'paid'
@@ -312,6 +315,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const [mode] = useState<'normal' | 'pending' | 'fail' | 'resi' | 'area'>('normal')
   const [payErr, setPayErr] = useState('')
   const [checking, setChecking] = useState(false)
+  const [syncingTrack, setSyncingTrack] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(r?.paymentUrl ?? null)
@@ -320,14 +324,45 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const [countdown, setCountdown] = useState(23 * 3600 + 59 * 60 + 12)
   const autoSyncedRef = useRef(false)
   const lastReturnSyncRef = useRef(0)
-  const c = COURIERS.find((x) => x.k === courier) ?? COURIERS[0]
+  const c = couriers.find((x) => x.k === courier) ?? couriers[0] ?? DEFAULT_COURIERS[0]
   const total = c.price + (insure ? 5000 : 0) + 2500
   const displayedAmount = r?.shippingAmount && phase !== 'form' ? r.shippingAmount : total
   const shown = useAnimatedNumber(total)
 
-  // Real package status from backend (controlled by Petugas Logistik / Admin in /staff)
+  // Real package status from backend (controlled by Petugas Logistik / Biteship Webhook)
   const realAwb = r?.awb || 'Menunggu input resi petugas logistik'
-  const pkgStep = r?.status === 'selesai' ? 2 : r?.awb ? 1 : 0
+  const shipNorm = (r?.shippingStatus || '').toLowerCase()
+  const pkgStep =
+    r?.status === 'selesai' || shipNorm === 'delivered'
+      ? 2
+      : ['picked', 'dropping_off', 'in_transit', 'on_hold'].includes(shipNorm) ||
+          Boolean(r?.awb && !['confirmed', 'allocated', 'picking_up'].includes(shipNorm))
+        ? 1
+        : 0
+
+  useEffect(() => {
+    if (phase !== 'form') return
+    if (!/^\d{5}$/.test(f.zip)) {
+      setCouriers(DEFAULT_COURIERS)
+      return
+    }
+    let cancelled = false
+    setRatesLoading(true)
+    reportApi
+      .shippingRates(f.zip)
+      .then((res) => {
+        if (cancelled || !res.couriers?.length) return
+        setCouriers(res.couriers)
+        setCourier((cur) => (res.couriers.some((opt) => opt.k === cur) ? cur : res.couriers[0].k))
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRatesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [f.zip, phase])
 
   useEffect(() => {
     if (r?.status === 'dikirim' || r?.status === 'selesai') {
@@ -473,6 +508,8 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
       const res = await reportApi.bast(id, {
         method: 'ekspedisi',
         courier,
+        courier_company: c.company,
+        courier_type: c.type,
         address: f.addr,
         city: f.city,
         zip: f.zip,
@@ -557,7 +594,32 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
             </Button>
           </section>
           <section className="rounded-[20px] border border-line bg-white p-4">
-            <p className="text-xs font-semibold text-muted">Nomor Resi Kurir • {courier}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-muted">Nomor Resi Kurir • {r?.shippingCourier || courier}</p>
+              {(r?.biteshipOrderId || r?.biteshipTrackingId) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={RefreshCw}
+                  loading={syncingTrack}
+                  onClick={async () => {
+                    if (syncingTrack) return
+                    setSyncingTrack(true)
+                    try {
+                      const res = await reportApi.syncShipping(id)
+                      updateReport(id, res.report)
+                      toast('Status pelacakan kurir diperbarui.')
+                    } catch (err: any) {
+                      toast(err.message || 'Belum dapat memperbarui pelacakan.', { tone: 'danger' })
+                    } finally {
+                      setSyncingTrack(false)
+                    }
+                  }}
+                >
+                  Perbarui Lacak
+                </Button>
+              )}
+            </div>
             <div className="mt-1 flex items-center gap-2">
               <p className={cx('min-w-0 flex-1', r?.awb ? 'break-all font-mono text-[15px] font-bold tracking-wide text-ink' : 'text-sm font-semibold text-muted')}>{realAwb}</p>
               {r?.awb && (
@@ -577,6 +639,23 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                 </li>
               ))}
             </ol>
+            {r?.trackingHistory && r.trackingHistory.length > 0 && (
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="mb-2 text-xs font-bold text-ink">Riwayat Perjalanan Paket</p>
+                <ul className="flex flex-col gap-2">
+                  {r.trackingHistory.slice(-5).reverse().map((h, idx) => (
+                    <li key={idx} className="flex items-start justify-between gap-2 text-xs">
+                      <span className="text-ink">{h.note || h.status}</span>
+                      {h.updated_at && (
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted">
+                          {new Date(h.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         </div>
       </Screen>
@@ -704,10 +783,10 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
             <section className="rounded-[20px] border border-line bg-white p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-[15px] font-bold text-ink">Opsi Pengiriman</h2>
-                <span className="text-xs font-medium text-muted">Pilih kurir</span>
+                <span className="text-xs font-medium text-muted">{ratesLoading ? 'Memuat tarif...' : 'Pilih kurir'}</span>
               </div>
               <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="Opsi pengiriman">
-                {COURIERS.map((co) => {
+                {couriers.map((co) => {
                   const active = courier === co.k
                   return (
                     <button
@@ -732,14 +811,16 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-sm font-bold text-ink">{co.k}</span>
-                          <span
-                            className={cx(
-                              'rounded-md px-1.5 py-0.5 text-[10px] font-bold',
-                              active ? 'bg-primary text-white' : 'bg-tint text-primary-dark'
-                            )}
-                          >
-                            {co.tag}
-                          </span>
+                          {co.tag && (
+                            <span
+                              className={cx(
+                                'rounded-md px-1.5 py-0.5 text-[10px] font-bold',
+                                active ? 'bg-primary text-white' : 'bg-tint text-primary-dark'
+                              )}
+                            >
+                              {co.tag}
+                            </span>
+                          )}
                         </div>
                         <p className="mt-0.5 text-xs font-medium text-muted">Estimasi tiba {co.eta}</p>
                         <p className="text-[11px] text-muted/80">{co.desc}</p>

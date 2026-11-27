@@ -129,9 +129,15 @@ class LaporanBarangHilang extends Model
             'snapToken'       => $latestBast?->snap_token,
             'paymentUrl'      => $latestBast?->payment_url,
             'paymentType'     => $latestBast?->payment_type,
-            'shippingCourier' => $latestBast?->kurir,
-            'shippingAmount'  => $latestBast?->ongkir,
-            'shippingAddress' => $latestBast?->alamat_kirim,
+            'shippingCourier'    => $latestBast?->kurir,
+            'courierCompany'     => $latestBast?->courier_company,
+            'courierType'        => $latestBast?->courier_type,
+            'shippingAmount'     => $latestBast?->ongkir,
+            'shippingAddress'    => $latestBast?->alamat_kirim,
+            'shippingStatus'     => $latestBast?->shipping_status,
+            'biteshipOrderId'    => $latestBast?->biteship_order_id,
+            'biteshipTrackingId' => $latestBast?->biteship_tracking_id,
+            'trackingHistory'    => $latestBast?->tracking_history ?? [],
         ];
     }
 }

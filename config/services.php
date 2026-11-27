@@ -52,4 +52,14 @@ return [
         'webhook_secret' => env('SHIPPING_WEBHOOK_SECRET'),
     ],
 
+    'biteship' => [
+        'api_key' => env('BITESHIP_API_KEY'),
+        'base_url' => env('BITESHIP_BASE_URL', 'https://api.biteship.com/v1'),
+        'origin_postal_code' => (int) env('BITESHIP_ORIGIN_POSTAL_CODE', 11110),
+        'origin_address' => env('BITESHIP_ORIGIN_ADDRESS', 'Posko CS Stasiun Jakarta Kota, Jl. Stasiun Kota No.1, Pinangsia, Tamansari, Jakarta Barat'),
+        'origin_name' => env('BITESHIP_ORIGIN_NAME', 'Posko CS LoFound KAI Commuter'),
+        'origin_phone' => env('BITESHIP_ORIGIN_PHONE', '081212345678'),
+        'couriers' => env('BITESHIP_COURIERS', 'jne,pos,jnt,sicepat,anteraja'),
+    ],
+
 ];

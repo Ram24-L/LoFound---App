@@ -10,6 +10,7 @@ use App\Models\PencocokanKandidat;
 use App\Models\RiwayatLaporan;
 use App\Models\Stasiun;
 use App\Models\BastPengambilan;
+use App\Services\BiteshipService;
 use App\Services\NotificationService;
 use App\Services\PaymentGatewayService;
 use Illuminate\Http\JsonResponse;
@@ -532,15 +533,17 @@ class ReportController
     public function bast(Request $request, string $kode): JsonResponse
     {
         $request->validate([
-            'method'     => 'required|in:stasiun,ekspedisi',
-            'courier'    => 'nullable|string',
-            'address'    => 'nullable|string',
-            'city'       => 'nullable|string',
-            'zip'        => 'nullable|string',
-            'name'       => 'nullable|string',
-            'wa'         => 'nullable|string',
-            'insure'     => 'boolean',
-            'pay_method' => 'nullable|string',
+            'method'          => 'required|in:stasiun,ekspedisi',
+            'courier'         => 'nullable|string',
+            'courier_company' => 'nullable|string|max:40',
+            'courier_type'    => 'nullable|string|max:40',
+            'address'         => 'nullable|string',
+            'city'            => 'nullable|string',
+            'zip'             => 'nullable|string',
+            'name'            => 'nullable|string',
+            'wa'              => 'nullable|string',
+            'insure'          => 'boolean',
+            'pay_method'      => 'nullable|string',
         ]);
 
         $laporan = LaporanBarangHilang::where('kode', $kode)
@@ -581,11 +584,31 @@ class ReportController
             ]);
         } else {
             $courier = $request->input('courier', 'KAI Logistik Express');
+            $company = $request->input('courier_company');
+            $type = $request->input('courier_type');
+            $zip = preg_replace('/\D+/', '', (string) $request->input('zip', '')) ?? '';
+
             $basePrice = match ($courier) {
                 'JNE Reguler'    => 16000,
                 'Pos Indonesia'  => 14000,
                 default          => 18000,
             };
+
+            $biteship = app(BiteshipService::class);
+            if ($biteship->isConfigured() && $company && $type && strlen($zip) === 5) {
+                $rates = $biteship->getRates($zip);
+                foreach ($rates['couriers'] ?? [] as $rateOpt) {
+                    if (
+                        strtolower((string) ($rateOpt['company'] ?? '')) === strtolower((string) $company) &&
+                        strtolower((string) ($rateOpt['type'] ?? '')) === strtolower((string) $type)
+                    ) {
+                        $basePrice = (int) $rateOpt['price'];
+                        $courier = (string) ($rateOpt['k'] ?? $courier);
+                        break;
+                    }
+                }
+            }
+
             $insure = $request->boolean('insure');
             $insureFee = $insure ? 5000 : 0;
             $adminFee = 2500;
@@ -596,7 +619,12 @@ class ReportController
                 $request->input('city'),
                 $request->input('zip'),
             ])) ?: 'Bogor Tengah, Kota Bogor';
-            $bastData['kurir']  = $courier;
+            $bastData['destination_postal_code'] = strlen($zip) === 5 ? $zip : ($existingBast?->destination_postal_code ?? '16143');
+            $bastData['recipient_name'] = $request->input('name') ?: $request->user()->name;
+            $bastData['recipient_phone'] = $request->input('wa') ?: $request->user()->phone;
+            $bastData['kurir'] = $courier;
+            $bastData['courier_company'] = $company ?: $existingBast?->courier_company;
+            $bastData['courier_type'] = $type ?: $existingBast?->courier_type;
             $bastData['ongkir'] = $ongkir;
 
             $pg = app(PaymentGatewayService::class);
@@ -812,6 +840,57 @@ class ReportController
             'ok'      => true,
             'message' => 'Pembayaran berhasil dibatalkan.',
             'report'  => $laporan->fresh()->toReportArray(),
+        ]);
+    }
+
+    /**
+     * POST /api/shipping/rates — fetch real-time Biteship courier rates (or fallback options)
+     */
+    public function shippingRates(Request $request, BiteshipService $biteship): JsonResponse
+    {
+        $request->validate([
+            'postal_code' => 'required|string|regex:/^\d{5}$/',
+        ]);
+
+        return response()->json($biteship->getRates((string) $request->input('postal_code')));
+    }
+
+    /**
+     * POST /api/reports/{kode}/bast/sync-shipping — sync live courier tracking from Biteship
+     */
+    public function syncShipping(Request $request, string $kode, BiteshipService $biteship): JsonResponse
+    {
+        $laporan = LaporanBarangHilang::where('kode', $kode)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $klaim = $laporan->klaim()
+            ->where('status_verifikasi', 'disetujui')
+            ->latest()
+            ->first() ?? $laporan->klaim()->latest()->firstOrFail();
+
+        $bast = BastPengambilan::where('klaim_id', $klaim->id)->latest()->firstOrFail();
+
+        if (($bast->biteship_tracking_id || $bast->biteship_order_id) && $biteship->isConfigured()) {
+            $tracking = $biteship->getTracking($bast->biteship_tracking_id, $bast->biteship_order_id);
+            if ($tracking) {
+                $biteship->applyTrackingUpdate(
+                    $bast,
+                    $tracking['status'],
+                    $tracking['waybill_id'] ?? null,
+                    $tracking['history'] ?? [],
+                    'Biteship Sync'
+                );
+            }
+        }
+
+        $freshBast = $bast->fresh();
+
+        return response()->json([
+            'shipping_status' => $freshBast->shipping_status ?? $freshBast->status_bayar,
+            'awb'             => $freshBast->nomor_resi,
+            'history'         => $freshBast->tracking_history ?? [],
+            'report'          => $laporan->fresh()->toReportArray(),
         ]);
     }
 

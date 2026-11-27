@@ -49,10 +49,8 @@ export function ShippingQueuePage() {
     setBusy(true)
     setErr('')
     try {
-      const randomSuffix = Math.floor(10000000 + Math.random() * 90000000)
-      const generatedAwb = `KALOG-${randomSuffix}ID`
       const bastId = open.id ?? 1
-      const res = await staffApi.logistics.shipOrder(bastId, generatedAwb, 'pack')
+      const res = await staffApi.logistics.shipOrder(bastId, '', 'pack')
       setAwb(res.awb)
       setRows((rs) => rs.map((r) => (r.no === open.no ? { ...r, awb: res.awb, status: 'Dikemas' } : r)))
       toast('Resi dibuat otomatis dan tersimpan ke PostgreSQL. Penumpang telah dikabari.')
@@ -106,6 +104,16 @@ export function ShippingQueuePage() {
       fetchShipments()
     } catch (error: any) {
       toast(error.message || 'Gagal menyelesaikan pesanan.', { tone: 'danger' })
+    }
+  }
+
+  const handleSyncTracking = async (r: any) => {
+    try {
+      const res = await staffApi.logistics.syncTracking(r.id)
+      toast(`Status kurir diperbarui: ${res.shipping_status}${res.awb ? ` (${res.awb})` : ''}`)
+      fetchShipments()
+    } catch (error: any) {
+      toast(error.message || 'Gagal menyinkronkan tracking Biteship.', { tone: 'danger' })
     }
   }
 
@@ -166,11 +174,23 @@ export function ShippingQueuePage() {
                           <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
                             Simulasi Tiba
                           </Button>
+                          {(r.biteship_order_id || r.biteship_tracking_id) && (
+                            <Button size="sm" variant="outline" onClick={() => handleSyncTracking(r)}>
+                              Sync Kurir
+                            </Button>
+                          )}
                         </div>
                       ) : r.status === 'Dikirim' ? (
-                        <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
-                          Simulasi Pesanan Tiba (Selesai)
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="success" onClick={() => handleMarkDelivered(r)}>
+                            Simulasi Pesanan Tiba (Selesai)
+                          </Button>
+                          {(r.biteship_order_id || r.biteship_tracking_id) && (
+                            <Button size="sm" variant="outline" onClick={() => handleSyncTracking(r)}>
+                              Sync Kurir
+                            </Button>
+                          )}
+                        </div>
                       ) : (
                         <Badge tone="success">Selesai Diterima</Badge>
                       )}

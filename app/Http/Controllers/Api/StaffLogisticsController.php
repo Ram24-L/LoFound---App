@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\BarangTemuan;
 use App\Models\BastPengambilan;
 use App\Models\RiwayatLaporan;
+use App\Services\BiteshipService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -41,15 +42,18 @@ class StaffLogisticsController extends Controller
                 }
 
                 return [
-                    'id'        => $bast->id,
-                    'no'        => $laporan ? $laporan->kode : $bast->kode,
-                    'bast_code' => $bast->kode,
-                    'recipient' => $user ? $user->name : 'Penumpang KRL',
-                    'courier'   => $bast->kurir ?? 'KAI Logistik Express',
-                    'dest'      => $bast->alamat_kirim ?? 'Bogor Tengah, Bogor',
-                    'paid'      => $bast->created_at->format('j M, H:i'),
-                    'status'    => $status,
-                    'awb'       => $bast->nomor_resi,
+                    'id'                   => $bast->id,
+                    'no'                   => $laporan ? $laporan->kode : $bast->kode,
+                    'bast_code'            => $bast->kode,
+                    'recipient'            => $bast->recipient_name ?: ($user ? $user->name : 'Penumpang KRL'),
+                    'courier'              => $bast->kurir ?? 'KAI Logistik Express',
+                    'dest'                 => $bast->alamat_kirim ?? 'Bogor Tengah, Bogor',
+                    'paid'                 => $bast->created_at->format('j M, H:i'),
+                    'status'               => $status,
+                    'awb'                  => $bast->nomor_resi,
+                    'biteship_order_id'    => $bast->biteship_order_id,
+                    'biteship_tracking_id' => $bast->biteship_tracking_id,
+                    'shipping_status'      => $bast->shipping_status,
                 ];
             });
 
@@ -109,7 +113,7 @@ class StaffLogisticsController extends Controller
      * POST /api/staff/logistics/shipments/{id}/ship
      * Input tracking number (AWB / Resi) and mark shipment as shipped.
      */
-    public function shipOrder(Request $request, int $id)
+    public function shipOrder(Request $request, int $id, BiteshipService $biteship)
     {
         $request->validate([
             'awb'    => 'nullable|string',
@@ -119,7 +123,25 @@ class StaffLogisticsController extends Controller
         $bast = BastPengambilan::with(['klaim.laporan', 'klaim.barangTemuan'])->findOrFail($id);
         $user = $request->user();
         $action = $request->input('action', 'ship');
-        $awb = strtoupper($request->input('awb') ?: ($bast->nomor_resi ?: 'KALOG-' . rand(10000000, 99999999) . 'ID'));
+        $manualAwb = trim((string) $request->input('awb', ''));
+
+        if ($action === 'pack' && $manualAwb === '' && $biteship->isConfigured()) {
+            $order = $biteship->createOrder($bast);
+            if (! ($order['ok'] ?? false)) {
+                return response()->json([
+                    'message' => $order['error'] ?? 'Gagal membuat order ekspedisi di Biteship.',
+                ], 502);
+            }
+
+            $bast->biteship_order_id = $order['order_id'] ?: null;
+            $bast->biteship_tracking_id = $order['tracking_id'] ?: null;
+            $bast->shipping_status = $order['status'] ?: 'confirmed';
+
+            $cleanOrderSuffix = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $order['order_id']) ?: Str::random(8));
+            $awb = strtoupper((string) ($order['waybill_id'] ?: ('BSHP-' . substr($cleanOrderSuffix, -8))));
+        } else {
+            $awb = strtoupper($manualAwb ?: ($bast->nomor_resi ?: 'KALOG-' . rand(10000000, 99999999) . 'ID'));
+        }
 
         // Check AWB duplicate
         $dup = BastPengambilan::where('nomor_resi', $awb)
@@ -196,6 +218,43 @@ class StaffLogisticsController extends Controller
             'message' => $action === 'delivered'
                 ? 'Simulasi pengiriman selesai: Paket telah diterima penumpang.'
                 : ($action === 'ship' ? 'Ditandai sudah diserahkan ke kurir.' : 'Resi pengiriman disimpan.'),
+        ]);
+    }
+
+    /**
+     * POST /api/logistics/shipments/{id}/sync-tracking — pull latest tracking status from Biteship
+     */
+    public function syncTracking(Request $request, int $id, BiteshipService $biteship)
+    {
+        $bast = BastPengambilan::findOrFail($id);
+
+        if (! $biteship->isConfigured()) {
+            return response()->json(['message' => 'Biteship API key belum dikonfigurasi.'], 422);
+        }
+
+        if (! $bast->biteship_tracking_id && ! $bast->biteship_order_id) {
+            return response()->json(['message' => 'Pengiriman ini belum memiliki Order ID Biteship.'], 422);
+        }
+
+        $tracking = $biteship->getTracking($bast->biteship_tracking_id, $bast->biteship_order_id);
+        if (! $tracking) {
+            return response()->json(['message' => 'Gagal mengambil status tracking dari Biteship.'], 502);
+        }
+
+        $user = $request->user();
+        $status = $biteship->applyTrackingUpdate(
+            $bast,
+            $tracking['status'],
+            $tracking['waybill_id'] ?? null,
+            $tracking['history'] ?? [],
+            $user->name . ' (Biteship Sync)'
+        );
+
+        return response()->json([
+            'ok'              => true,
+            'shipping_status' => $status,
+            'awb'             => $bast->fresh()->nomor_resi,
+            'history'         => $tracking['history'] ?? [],
         ]);
     }
 }

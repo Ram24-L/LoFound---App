@@ -29,6 +29,18 @@ export const COLORS = [
 
 export type ReportStatus = 'diterima' | 'pencarian' | 'kandidat' | 'ditinjau' | 'perlu_info' | 'ditolak' | 'bast' | 'dikirim' | 'selesai' | 'dibatalkan' | 'kedaluwarsa'
 
+export type TrackingHistoryEntry = { status: string; note: string; updated_at: string }
+export type ShippingRateOption = {
+  k: string
+  company: string
+  type: string
+  price: number
+  eta: string
+  tag: string
+  desc: string
+  source?: 'biteship' | 'fallback'
+}
+
 export type ReportItem = { sub: string; name: string; category: string; color: string }
 export type Report = {
   id: string
@@ -55,8 +67,14 @@ export type Report = {
   paymentUrl?: string
   paymentType?: string
   shippingCourier?: string
+  courierCompany?: string | null
+  courierType?: string | null
   shippingAmount?: number
   shippingAddress?: string
+  shippingStatus?: string | null
+  biteshipOrderId?: string | null
+  biteshipTrackingId?: string | null
+  trackingHistory?: TrackingHistoryEntry[]
 }
 
 export const STATUS_META: Record<ReportStatus, { label: string; tone: 'success' | 'info' | 'coral' | 'warn' | 'danger' | 'neutral'; action?: boolean; locked?: boolean }> = {
@@ -243,7 +261,19 @@ export const CLAIMS: Claim[] = [
   { no: 'KLM-2026-101', reporter: 'T. M*****', item: 'Hoodie abu', itemCode: 'FND-0377', submitted: '30 Okt', slaMin: 0, tab: 'selesai', handler: 'Anda' },
 ]
 
-export type Shipment = { id?: number; no: string; recipient: string; courier: string; dest: string; paid: string; status: 'Menunggu Resi' | 'Dikemas' | 'Dikirim' | 'Selesai'; awb?: string }
+export type Shipment = {
+  id?: number
+  no: string
+  recipient: string
+  courier: string
+  dest: string
+  paid: string
+  status: 'Menunggu Resi' | 'Dikemas' | 'Dikirim' | 'Selesai'
+  awb?: string
+  biteship_order_id?: string | null
+  biteship_tracking_id?: string | null
+  shipping_status?: string | null
+}
 export const SHIPMENTS: Shipment[] = [
   { no: 'LPR-2026-042', recipient: 'M. Ramdhan M.', courier: 'KAI Logistik Express', dest: 'Bogor Tengah, Bogor', paid: '2 Nov, 15:10', status: 'Menunggu Resi' },
   { no: 'LPR-2026-036', recipient: 'Siti A.', courier: 'JNE Reguler', dest: 'Beji, Depok', paid: '2 Nov, 09:44', status: 'Menunggu Resi' },

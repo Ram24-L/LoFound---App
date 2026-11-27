@@ -44,9 +44,9 @@ Route::post('/auth/otp/send', [AuthController::class, 'sendOtp'])->middleware('t
 Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth');
 Route::get('/auth/user', [AuthController::class, 'user']);
 
-// Production Webhooks (Signature / Secret Verified)
-Route::post('/webhooks/payment', [WebhookController::class, 'payment']);
-Route::post('/webhooks/shipping', [WebhookController::class, 'shipping']);
+// Production Webhooks (Signature / Secret Verified, GET supported for dashboard endpoint checks)
+Route::match(['get', 'post'], '/webhooks/payment', [WebhookController::class, 'payment']);
+Route::match(['get', 'post'], '/webhooks/shipping', [WebhookController::class, 'shipping']);
 
 // Protected passenger & authenticated routes
 Route::middleware('auth')->group(function () {
@@ -69,6 +69,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/reports/{kode}/bast', [ReportController::class, 'bast']);
     Route::post('/reports/{kode}/bast/sync-payment', [ReportController::class, 'syncPayment']);
     Route::post('/reports/{kode}/bast/cancel-payment', [ReportController::class, 'cancelPayment']);
+    Route::post('/reports/{kode}/bast/sync-shipping', [ReportController::class, 'syncShipping']);
+    Route::post('/shipping/rates', [ReportController::class, 'shippingRates']);
 });
 
 /*
@@ -100,6 +102,7 @@ Route::middleware('auth')->prefix('staff')->group(function () {
         Route::get('/logistics/inventory', [StaffLogisticsController::class, 'inventory']);
         Route::patch('/logistics/found-items/{id}', [StaffLogisticsController::class, 'updateItem']);
         Route::post('/logistics/shipments/{id}/ship', [StaffLogisticsController::class, 'shipOrder']);
+        Route::post('/logistics/shipments/{id}/sync-tracking', [StaffLogisticsController::class, 'syncTracking']);
     });
 
     // Admin routes

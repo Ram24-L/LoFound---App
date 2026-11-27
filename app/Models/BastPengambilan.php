@@ -11,14 +11,17 @@ class BastPengambilan extends Model
 
     protected $fillable = [
         'kode', 'midtrans_order_id', 'klaim_id', 'kode_qr', 'metode_ambil',
-        'stasiun_ambil_id', 'alamat_kirim', 'kurir', 'ongkir',
-        'status_bayar', 'snap_token', 'payment_url', 'payment_type',
-        'nomor_resi', 'waktu_serah_terima',
+        'stasiun_ambil_id', 'alamat_kirim', 'destination_postal_code',
+        'recipient_name', 'recipient_phone', 'kurir', 'courier_company', 'courier_type',
+        'ongkir', 'status_bayar', 'snap_token', 'payment_url', 'payment_type',
+        'nomor_resi', 'biteship_order_id', 'biteship_tracking_id',
+        'shipping_status', 'tracking_history', 'waktu_serah_terima',
     ];
 
     protected function casts(): array
     {
         return [
+            'tracking_history'   => 'array',
             'waktu_serah_terima' => 'datetime',
         ];
     }

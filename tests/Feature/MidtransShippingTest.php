@@ -278,6 +278,18 @@ class MidtransShippingTest extends TestCase
 
         $this->assertSame('gagal', $bast->fresh()->status_bayar);
         $this->assertSame('bast', $laporan->fresh()->status);
+
+        // Endpoint health check (GET) and Midtrans Dashboard Test Notification
+        $this->getJson('/api/webhooks/payment')->assertOk()->assertJsonPath('ok', true);
+        $testOrderId = 'payment_notif_test_12345';
+        $testSig = hash('sha512', $testOrderId . '200' . '10000.00' . 'SB-Mid-server-TestKey123');
+        $this->postJson('/api/webhooks/payment', [
+            'order_id'           => $testOrderId,
+            'status_code'        => '200',
+            'gross_amount'       => '10000.00',
+            'transaction_status' => 'settlement',
+            'signature_key'      => $testSig,
+        ])->assertOk()->assertJsonPath('test', true);
     }
 
     public function test_shipping_checkout_returns_502_when_midtrans_api_rejects_request(): void

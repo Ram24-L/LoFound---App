@@ -153,7 +153,7 @@ export const api = {
 // Typed endpoint helpers
 // ========================
 
-import type { Claim, InvItem, Report, Shipment } from './data'
+import type { Claim, InvItem, Report, Shipment, ShippingRateOption, TrackingHistoryEntry } from './data'
 
 export type SavedAddress = {
   label?: string
@@ -301,6 +301,15 @@ export const reportApi = {
       message?: string
       report: Report
     }>(`/api/reports/${kode}/bast/cancel-payment`),
+  shippingRates: (postal_code: string) =>
+    api.post<{ configured: boolean; source: string; couriers: ShippingRateOption[] }>('/api/shipping/rates', { postal_code }),
+  syncShipping: (kode: string) =>
+    api.post<{
+      shipping_status: string
+      awb?: string | null
+      history: TrackingHistoryEntry[]
+      report: Report
+    }>(`/api/reports/${kode}/bast/sync-shipping`),
   notifications: () =>
     api.get<Array<{ id: number; report_id: string; title: string; body: string; t: string; unread: boolean }>>('/api/notifications'),
 }
@@ -370,6 +379,8 @@ export const staffApi = {
       api.patch<{ item: any }>(`/api/staff/logistics/found-items/${id}`, data),
     shipOrder: (id: number, awb: string, action: 'pack' | 'ship' | 'delivered') =>
       api.post<{ bast: any; status: string; awb: string; message: string }>(`/api/staff/logistics/shipments/${id}/ship`, { awb, action }),
+    syncTracking: (id: number) =>
+      api.post<{ ok: boolean; shipping_status: string; awb?: string | null; history: TrackingHistoryEntry[] }>(`/api/staff/logistics/shipments/${id}/sync-tracking`),
   },
   admin: {
     users: () => api.get<any[]>('/api/staff/admin/users'),
