@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Camera, Check, CheckCircle2, Clock, Flag, Info, Keyboard, Link2, Lock, MessageSquare, Pencil, Plus, QrCode, RefreshCw, Scale, ScanLine, Search, ShieldCheck, UserCheck, Users, X, XCircle } from 'lucide-react'
-import { COLORS, STATIONS, type Claim, type InvItem, type InvStatus } from '../lib/data'
-import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, rupiah, useCategories, useToast } from '../lib/ui'
+import { COLORS, type Claim, type InvItem, type InvStatus } from '../lib/data'
+import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, EmptyState, Field, inputCls, rupiah, useCategories, useStations, useToast } from '../lib/ui'
 import { calcPackageMetrics } from '../lib/shipping'
 import { Drawer, Modal, PageHead, Panel, Tabs, td, th, useStaff } from './common'
 import { staffApi, uploadApi } from '../lib/api'
@@ -25,7 +25,7 @@ export function InventoryPage() {
     <>
       <PageHead
         title="Inventaris Barang Temuan"
-        sub={`Posko CS St. ${stationName} • Terintegrasi PostgreSQL`}
+        sub={`Posko CS St. ${stationName} • Sistem Inventaris Lost & Found`}
         actions={
           <Button variant="cta" icon={Plus} onClick={() => setDrawer(true)}>
             Catat Barang Temuan Baru
@@ -144,6 +144,7 @@ export function InventoryPage() {
 function ItemDrawer({ open, onClose, edit }: { open: boolean; onClose: () => void; edit?: InvItem }) {
   const { inventory, setInventory, refreshDashboard, staffUser } = useStaff()
   const { categories: CATEGORIES } = useCategories()
+  const { stations: STATIONS } = useStations()
   const toast = useToast()
   const claimLocked = edit?.status === 'Dalam Klaim'
   const defStation = staffUser?.station && staffUser.station !== 'Pusat' ? staffUser.station : 'Jakarta Kota'

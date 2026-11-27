@@ -628,4 +628,111 @@ class BiteshipShippingTest extends TestCase
             return $gross === 1 && count($items) === 1 && ($items[0]['price'] ?? null) === 1;
         });
     }
+
+    public function test_multi_point_station_origin_drives_biteship_rates_and_order(): void
+    {
+        config()->set('services.biteship.api_key', 'biteship_test.TestKey123');
+        config()->set('services.biteship.origin_postal_code', 11110);
+
+        [$passenger, $logistik, $laporan, $klaim, $temuan] = $this->seedApprovedScenario();
+
+        // Assign the found item to Stasiun Bogor (BOO) with its own postal code & posko address
+        $bogor = Stasiun::updateOrCreate(
+            ['kode' => 'BOO'],
+            [
+                'nama'          => 'Bogor',
+                'lin'           => 'Lin Bogor',
+                'kode_pos'      => '16124',
+                'telepon_posko' => '081210000101',
+                'alamat_posko'  => 'Posko CS Stasiun Bogor, Jl. Nyi Raja Permas, Bogor Tengah',
+                'active'        => true,
+            ]
+        );
+        $temuan->update(['stasiun_temuan_id' => $bogor->id]);
+
+        Http::fake([
+            'https://api.biteship.com/v1/rates/couriers' => Http::response([
+                'success' => true,
+                'pricing' => [
+                    [
+                        'courier_name'            => 'JNE',
+                        'courier_code'            => 'jne',
+                        'courier_service_name'    => 'REG',
+                        'courier_service_code'    => 'reg',
+                        'shipment_duration_range' => '1 - 2',
+                        'shipment_duration_unit'  => 'days',
+                        'price'                   => 9000,
+                    ],
+                ],
+            ], 200),
+            'https://api.biteship.com/v1/orders' => Http::response([
+                'success' => true,
+                'id'      => 'bshp-order-boo-955',
+                'status'  => 'confirmed',
+                'courier' => [
+                    'tracking_id' => 'bshp-track-boo-955',
+                    'waybill_id'  => 'JNEBOO955',
+                ],
+            ], 200),
+        ]);
+
+        // 1. Passenger shipping rates query automatically uses Stasiun Bogor (16124) instead of Jakarta Kota (11110)
+        $ratesRes = $this->actingAs($passenger)->postJson('/api/shipping/rates', [
+            'postal_code' => '16610',
+            'report_code' => $laporan->kode,
+        ]);
+        $ratesRes->assertOk()
+            ->assertJsonPath('origin.station_name', 'Bogor')
+            ->assertJsonPath('origin.postal_code', '16124');
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/rates/couriers') && ($req['origin_postal_code'] ?? null) === 16124);
+
+        // 2. Biteship courier order dispatches pickup directly from Posko CS Stasiun Bogor (16124)
+        $bast = BastPengambilan::create([
+            'kode'                    => 'BAST-2026-955',
+            'klaim_id'                => $klaim->id,
+            'metode_ambil'            => 'ekspedisi',
+            'alamat_kirim'            => 'Jl. Dramaga No. 5, Ciomas, 16610',
+            'destination_postal_code' => '16610',
+            'recipient_name'          => 'M. Ramdhan Maulana',
+            'recipient_phone'         => '081234567890',
+            'kurir'                   => 'JNE REG',
+            'courier_company'         => 'jne',
+            'courier_type'            => 'reg',
+            'ongkir'                  => 16500,
+            'status_bayar'            => 'lunas',
+        ]);
+
+        $this->actingAs($logistik)->postJson("/api/staff/logistics/shipments/{$bast->id}/ship", [
+            'awb'    => '',
+            'action' => 'pack',
+        ])->assertOk()->assertJsonPath('awb', 'JNEBOO955');
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/v1/orders')
+            && ($req['origin_postal_code'] ?? null) === 16124
+            && str_contains((string) ($req['origin_address'] ?? ''), 'Stasiun Bogor'));
+
+        // 3. Logistics inventory exposes dynamic origin_station metadata
+        $invRes = $this->actingAs($logistik)->getJson('/api/staff/logistics/inventory')->assertOk();
+        $row = collect($invRes->json('shipments'))->firstWhere('bast_code', 'BAST-2026-955');
+        $this->assertSame('Bogor', $row['origin_station'] ?? null);
+        $this->assertSame('16124', $row['origin_postal_code'] ?? null);
+
+        // 4. Admin can update station postal_code & address dynamically via API
+        $admin = User::firstOrCreate(
+            ['email' => 'hendra.w@kci.id'],
+            ['name' => 'Hendra Wijaya', 'password' => bcrypt('password'), 'role' => 'admin']
+        );
+        $this->actingAs($admin)->patchJson("/api/staff/admin/stations/{$bogor->id}", [
+            'postal_code' => '16141',
+            'address'     => 'Posko CS Baru Stasiun Bogor Timur, 16141',
+        ])->assertOk()
+            ->assertJsonPath('station.postal_code', '16141');
+
+        $updatedRates = $this->actingAs($passenger)->postJson('/api/shipping/rates', [
+            'postal_code' => '16610',
+            'report_code' => $laporan->kode,
+        ]);
+        $updatedRates->assertOk()->assertJsonPath('origin.postal_code', '16141');
+    }
 }

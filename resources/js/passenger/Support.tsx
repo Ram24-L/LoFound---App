@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, BellOff, ChevronDown, ChevronRight, CircleHelp, Compass, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Pencil, Plus, Search, ServerCrash, ShieldAlert, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
+import { AlertTriangle, BellOff, Check, ChevronDown, ChevronRight, CircleHelp, Compass, Download, FileLock2, History, KeyRound, LogOut, MapPin, MessageCircle, Pencil, Plus, Search, ServerCrash, Share, ShieldAlert, Smartphone, Trash2, User, Wrench, BellRing, Clock } from 'lucide-react'
 import { NOTIFS } from '../lib/data'
-import { Badge, Button, cx, Dialog, EmptyState, Field, inputCls, rupiah, Toggle, useToast } from '../lib/ui'
+import { Badge, Button, cx, Dialog, EmptyState, Field, inputCls, LogoMark, rupiah, Sheet, Toggle, useToast } from '../lib/ui'
 import { authApi, reportApi, type SavedAddress } from '../lib/api'
+import { usePwaInstall } from '../lib/pwa'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -128,6 +129,8 @@ function SwipeRow({ children, onDelete }: { children: React.ReactNode; onDelete:
 export function ProfileScreen() {
   const { user, login, logout, go } = useApp()
   const toast = useToast()
+  const pwa = usePwaInstall()
+  const [installSheet, setInstallSheet] = useState(false)
   const [notif, setNotif] = useState({ wa: true, email: true, push: false })
   const [section, setSection] = useState<string | null>(null)
   const [del, setDel] = useState<0 | 1 | 2>(0)
@@ -251,6 +254,42 @@ export function ProfileScreen() {
         </div>
       </header>
       <div className="flex flex-col gap-3 p-5">
+        <div className="flex items-center gap-3 rounded-[20px] border border-[#bfe0ee] bg-white p-4">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 ring-1 ring-line">
+            <LogoMark className="h-full w-full" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-ink">Aplikasi LoFound</p>
+            <p className="text-xs text-muted">
+              {pwa.isInstalled
+                ? 'Aplikasi sudah terpasang di perangkat ini.'
+                : 'Akses lebih cepat langsung dari layar utama perangkat Anda.'}
+            </p>
+          </div>
+          {pwa.isInstalled ? (
+            <Badge tone="success" icon={Check} className="shrink-0">
+              Terpasang
+            </Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={Download}
+              className="shrink-0"
+              onClick={async () => {
+                if (pwa.canInstall) {
+                  const res = await pwa.promptInstall()
+                  if (res === 'accepted') toast('Aplikasi LoFound sedang dipasang.')
+                  else if (res === 'unavailable') setInstallSheet(true)
+                } else {
+                  setInstallSheet(true)
+                }
+              }}
+            >
+              Unduh
+            </Button>
+          )}
+        </div>
         <ul className="overflow-hidden rounded-[20px] border border-line bg-white">
           {rows.map((r, i) => (
             <li key={r.k} className={cx(i > 0 && 'border-t border-line')}>
@@ -441,6 +480,27 @@ export function ProfileScreen() {
           Keluar
         </Button>
       </div>
+      <Sheet open={installSheet} onClose={() => setInstallSheet(false)} title="Pasang Aplikasi LoFound">
+        <div className="flex flex-col gap-3 text-sm leading-5 text-muted">
+          <div className="flex items-start gap-3 rounded-2xl bg-tint p-3.5">
+            <Smartphone className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <div>
+              <p className="font-bold text-ink">Android / Chrome / Edge Desktop</p>
+              <p>Ketuk ikon <strong className="text-ink">Pasang Aplikasi</strong> di bilah alamat browser atau buka menu <strong className="text-ink">⋮</strong> → <strong className="text-ink">Tambahkan ke layar utama</strong>.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 rounded-2xl bg-tint p-3.5">
+            <Share className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <div>
+              <p className="font-bold text-ink">iPhone / iPad (Safari)</p>
+              <p>Ketuk tombol <strong className="text-ink">Bagikan (Share)</strong> di bilah bawah Safari lalu pilih <strong className="text-ink">Tambah ke Layar Utama</strong>.</p>
+            </div>
+          </div>
+          <Button variant="primary" full onClick={() => setInstallSheet(false)}>
+            Mengerti
+          </Button>
+        </div>
+      </Sheet>
       <Dialog
         open={del === 1}
         onClose={() => setDel(0)}

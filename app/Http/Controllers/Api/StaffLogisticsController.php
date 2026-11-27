@@ -21,7 +21,12 @@ class StaffLogisticsController extends Controller
     public function inventory(Request $request)
     {
         // 1. Expedition shipments from BAST
-        $shipments = BastPengambilan::with(['klaim.laporan.user', 'klaim.laporan.items', 'klaim.barangTemuan'])
+        $shipments = BastPengambilan::with([
+            'klaim.laporan.user',
+            'klaim.laporan.items',
+            'klaim.laporan.stasiunKe',
+            'klaim.barangTemuan.stasiunTemuan',
+        ])
             ->where('metode_ambil', 'ekspedisi')
             ->orderByDesc('created_at')
             ->get()
@@ -29,6 +34,7 @@ class StaffLogisticsController extends Controller
                 $laporan = $bast->klaim?->laporan;
                 $user = $laporan?->user;
                 $barang = $bast->klaim?->barangTemuan;
+                $originStasiun = $barang?->stasiunTemuan ?? $laporan?->stasiunKe;
 
                 // Status mapping:
                 // Failed/returned shipping statuses -> 'Bermasalah'
@@ -68,6 +74,11 @@ class StaffLogisticsController extends Controller
                     'width_cm'                => $barang?->lebar_cm ? (int) $barang->lebar_cm : null,
                     'height_cm'               => $barang?->tinggi_cm ? (int) $barang->tinggi_cm : null,
                     'estimated_value'         => $barang ? (int) ($barang->estimasi_nilai ?? 250000) : 250000,
+                    'origin_station'          => $originStasiun?->nama ?? 'Jakarta Kota',
+                    'origin_station_code'     => $originStasiun?->kode,
+                    'origin_postal_code'      => $originStasiun?->kode_pos,
+                    'origin_address'          => $originStasiun?->alamat_posko,
+                    'origin_phone'            => $originStasiun?->telepon_posko,
                 ];
             });
 

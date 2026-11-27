@@ -573,14 +573,17 @@ class ReportController
         $snap = null;
         $midtransMode = 'simulation';
 
+        $klaim->loadMissing(['barangTemuan.stasiunTemuan']);
+        $originStasiun = $klaim->barangTemuan?->stasiunTemuan ?? $laporan->stasiunKe;
+
         if ($method === 'stasiun') {
-            $bastData['stasiun_ambil_id'] = $laporan->stasiunKe->id;
+            $bastData['stasiun_ambil_id'] = $originStasiun->id;
             $bastData['kode_qr'] = $existingBast?->kode_qr ?? ('KCI-' . now()->year . '-' . str_pad($laporan->id, 3, '0', STR_PAD_LEFT));
 
             RiwayatLaporan::create([
                 'laporan_id' => $laporan->id,
                 'waktu'      => now()->format('H:i'),
-                'keterangan' => 'Memilih ambil mandiri di stasiun',
+                'keterangan' => "Memilih ambil mandiri di Posko CS St. {$originStasiun->nama}",
             ]);
         } else {
             $courier = $request->input('courier', 'KAI Logistik Express');
@@ -595,9 +598,9 @@ class ReportController
             };
 
             $biteship = app(BiteshipService::class);
-            $klaim->loadMissing('barangTemuan');
             $foundItem = $klaim->barangTemuan;
             $specs = $foundItem?->shippingSpecs();
+            $originSpecs = $originStasiun?->originSpecs();
 
             if ($biteship->isConfigured() && $company && $type && strlen($zip) === 5) {
                 $rates = $biteship->getRates(
@@ -607,7 +610,8 @@ class ReportController
                     $specs['length_cm'] ?? null,
                     $specs['width_cm'] ?? null,
                     $specs['height_cm'] ?? null,
-                    $foundItem?->nama_barang
+                    $foundItem?->nama_barang,
+                    $originSpecs
                 );
                 foreach ($rates['couriers'] ?? [] as $rateOpt) {
                     if (
@@ -890,10 +894,12 @@ class ReportController
         $height = $request->filled('height_cm') ? (int) $request->input('height_cm') : null;
         $itemName = null;
 
+        $originSpecs = null;
+
         if ($request->filled('report_code')) {
             $laporan = LaporanBarangHilang::where('kode', (string) $request->input('report_code'))
                 ->where('user_id', $request->user()->id)
-                ->with(['klaim.barangTemuan', 'pencocokan.barangTemuan'])
+                ->with(['klaim.barangTemuan.stasiunTemuan', 'pencocokan.barangTemuan.stasiunTemuan', 'stasiunKe'])
                 ->first();
 
             $klaim = $laporan?->klaim?->where('status_verifikasi', 'disetujui')->sortByDesc('id')->first()
@@ -909,10 +915,15 @@ class ReportController
                 $height = $specs['height_cm'];
                 $itemName = $foundItem->nama_barang;
             }
+
+            $originStasiun = $foundItem?->stasiunTemuan ?? $laporan?->stasiunKe;
+            if ($originStasiun) {
+                $originSpecs = $originStasiun->originSpecs();
+            }
         }
 
         return response()->json(
-            $biteship->getRates((string) $request->input('postal_code'), $weight, $value, $length, $width, $height, $itemName)
+            $biteship->getRates((string) $request->input('postal_code'), $weight, $value, $length, $width, $height, $itemName, $originSpecs)
         );
     }
 

@@ -27,6 +27,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+import { STATIONS } from './data'
+
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
 /* ---------- Buttons ---------- */
@@ -722,4 +724,52 @@ export function useCategories(fallback: string[] = ['Elektronik', 'Non Elektroni
   }, [])
 
   return { categories, nonShippable }
+}
+
+export type StationOption = {
+  id?: number
+  code: string
+  name: string
+  line: string
+  hours?: string
+  address?: string | null
+  postal_code?: string | null
+  phone?: string | null
+}
+
+export function useStations(fallback: StationOption[] = STATIONS) {
+  const [stations, setStations] = useState<StationOption[]>(fallback)
+
+  useEffect(() => {
+    let mounted = true
+    const load = () => {
+      fetch('/api/stations', { headers: { Accept: 'application/json' } })
+        .then((r) => r.json())
+        .then((data) => {
+          if (mounted && Array.isArray(data) && data.length > 0) {
+            setStations(
+              data.map((s: any) => ({
+                id: s.id,
+                code: s.kode || s.code,
+                name: s.nama || s.name,
+                line: s.lin || s.line,
+                hours: s.jam_layanan || s.hours || '04:00–24:00',
+                address: s.alamat_posko ?? s.address ?? null,
+                postal_code: s.kode_pos ?? s.postal_code ?? null,
+                phone: s.telepon_posko ?? s.phone ?? null,
+              })),
+            )
+          }
+        })
+        .catch(() => {})
+    }
+    load()
+    window.addEventListener('focus', load)
+    return () => {
+      mounted = false
+      window.removeEventListener('focus', load)
+    }
+  }, [])
+
+  return { stations }
 }

@@ -24,18 +24,18 @@ class DatabaseSeeder extends Seeder
          * 1. Stasiun KRL
          * ============================================================ */
         $stations = [
-            ['kode' => 'BOO',  'nama' => 'Bogor',                  'lin' => 'Lin Bogor'],
-            ['kode' => 'CTA',  'nama' => 'Cilebut',                'lin' => 'Lin Bogor'],
-            ['kode' => 'DP',   'nama' => 'Depok',                  'lin' => 'Lin Bogor'],
-            ['kode' => 'UI',   'nama' => 'Universitas Indonesia',  'lin' => 'Lin Bogor'],
-            ['kode' => 'MRI',  'nama' => 'Manggarai',              'lin' => 'Lin Bogor'],
-            ['kode' => 'JAKK', 'nama' => 'Jakarta Kota',           'lin' => 'Lin Bogor'],
-            ['kode' => 'THB',  'nama' => 'Tanah Abang',            'lin' => 'Lin Rangkasbitung'],
-            ['kode' => 'SUD',  'nama' => 'Sudirman',               'lin' => 'Lin Cikarang'],
-            ['kode' => 'BKS',  'nama' => 'Bekasi',                 'lin' => 'Lin Cikarang'],
-            ['kode' => 'TNG',  'nama' => 'Tangerang',              'lin' => 'Lin Tangerang'],
-            ['kode' => 'DU',   'nama' => 'Duri',                   'lin' => 'Lin Tangerang'],
-            ['kode' => 'SRP',  'nama' => 'Serpong',                'lin' => 'Lin Rangkasbitung'],
+            ['kode' => 'BOO',  'nama' => 'Bogor',                 'lin' => 'Lin Bogor',         'kode_pos' => '16124', 'telepon_posko' => '081210000101', 'alamat_posko' => 'Posko CS Stasiun Bogor, Jl. Nyi Raja Permas, Cibogor, Bogor Tengah, Kota Bogor'],
+            ['kode' => 'CTA',  'nama' => 'Cilebut',               'lin' => 'Lin Bogor',         'kode_pos' => '16710', 'telepon_posko' => '081210000102', 'alamat_posko' => 'Posko CS Stasiun Cilebut, Cilebut Timur, Sukaraja, Kabupaten Bogor'],
+            ['kode' => 'DP',   'nama' => 'Depok',                 'lin' => 'Lin Bogor',         'kode_pos' => '16431', 'telepon_posko' => '081210000103', 'alamat_posko' => 'Posko CS Stasiun Depok, Jl. Stasiun Depok Lama, Pancoran Mas, Kota Depok'],
+            ['kode' => 'UI',   'nama' => 'Universitas Indonesia', 'lin' => 'Lin Bogor',         'kode_pos' => '16424', 'telepon_posko' => '081210000104', 'alamat_posko' => 'Posko CS Stasiun Universitas Indonesia, Pondok Cina, Beji, Kota Depok'],
+            ['kode' => 'MRI',  'nama' => 'Manggarai',             'lin' => 'Lin Bogor',         'kode_pos' => '12850', 'telepon_posko' => '081210000105', 'alamat_posko' => 'Posko CS Stasiun Manggarai, Jl. Dr. Saharjo No.1, Tebet, Jakarta Selatan'],
+            ['kode' => 'JAKK', 'nama' => 'Jakarta Kota',          'lin' => 'Lin Bogor',         'kode_pos' => '11110', 'telepon_posko' => '081210000106', 'alamat_posko' => 'Posko CS Stasiun Jakarta Kota, Jl. Stasiun Kota No.1, Pinangsia, Tamansari, Jakarta Barat'],
+            ['kode' => 'THB',  'nama' => 'Tanah Abang',           'lin' => 'Lin Rangkasbitung', 'kode_pos' => '10250', 'telepon_posko' => '081210000107', 'alamat_posko' => 'Posko CS Stasiun Tanah Abang, Jl. Jatibaru Raya, Cideng, Gambir, Jakarta Pusat'],
+            ['kode' => 'SUD',  'nama' => 'Sudirman',              'lin' => 'Lin Cikarang',      'kode_pos' => '10220', 'telepon_posko' => '081210000108', 'alamat_posko' => 'Posko CS Stasiun Sudirman, Jl. Kendal No.1, Dukuh Atas, Menteng, Jakarta Pusat'],
+            ['kode' => 'BKS',  'nama' => 'Bekasi',                'lin' => 'Lin Cikarang',      'kode_pos' => '17121', 'telepon_posko' => '081210000109', 'alamat_posko' => 'Posko CS Stasiun Bekasi, Jl. Ir. H. Juanda, Marga Mulya, Bekasi Utara, Kota Bekasi'],
+            ['kode' => 'TNG',  'nama' => 'Tangerang',             'lin' => 'Lin Tangerang',     'kode_pos' => '15111', 'telepon_posko' => '081210000110', 'alamat_posko' => 'Posko CS Stasiun Tangerang, Jl. Kisamaun, Sukarasa, Tangerang, Kota Tangerang'],
+            ['kode' => 'DU',   'nama' => 'Duri',                  'lin' => 'Lin Tangerang',     'kode_pos' => '11270', 'telepon_posko' => '081210000111', 'alamat_posko' => 'Posko CS Stasiun Duri, Jl. Duri Utara, Tambora, Jakarta Barat'],
+            ['kode' => 'SRP',  'nama' => 'Serpong',               'lin' => 'Lin Rangkasbitung', 'kode_pos' => '15310', 'telepon_posko' => '081210000112', 'alamat_posko' => 'Posko CS Stasiun Serpong, Jl. Stasiun Serpong, Rawa Buntu, Tangerang Selatan'],
         ];
 
         $stasiunMap = [];

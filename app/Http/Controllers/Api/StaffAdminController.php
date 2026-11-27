@@ -238,16 +238,7 @@ class StaffAdminController extends Controller
      */
     public function stations()
     {
-        $st = Stasiun::orderBy('id')->get()->map(function ($s) {
-            return [
-                'id'     => $s->id,
-                'code'   => $s->kode,
-                'name'   => $s->nama,
-                'line'   => $s->lin,
-                'hours'  => $s->jam_layanan ?? '04:00–24:00',
-                'active' => (bool) ($s->active ?? true),
-            ];
-        });
+        $st = Stasiun::orderBy('id')->get()->map(fn ($s) => $this->mapStation($s));
 
         return response()->json($st);
     }
@@ -258,32 +249,29 @@ class StaffAdminController extends Controller
     public function storeStation(Request $request)
     {
         $request->validate([
-            'code'  => 'required|string|max:10|unique:stasiun,kode',
-            'name'  => 'required|string|max:100',
-            'line'  => 'required|string|max:100',
-            'hours' => 'nullable|string|max:30',
+            'code'        => 'required|string|max:10|unique:stasiun,kode',
+            'name'        => 'required|string|max:100',
+            'line'        => 'required|string|max:100',
+            'hours'       => 'nullable|string|max:30',
+            'address'     => 'nullable|string|max:255',
+            'postal_code' => 'nullable|string|regex:/^\d{5}$/',
+            'phone'       => 'nullable|string|max:30',
         ]);
 
         $s = Stasiun::create([
-            'kode'        => strtoupper(trim($request->code)),
-            'nama'        => trim($request->name),
-            'lin'         => trim($request->line),
-            'jam_layanan' => $request->input('hours') ?: '04:00–24:00',
-            'active'      => $request->boolean('active', true),
+            'kode'          => strtoupper(trim($request->code)),
+            'nama'          => trim($request->name),
+            'lin'           => trim($request->line),
+            'jam_layanan'   => $request->input('hours') ?: '04:00–24:00',
+            'alamat_posko'  => $request->filled('address') ? trim((string) $request->input('address')) : null,
+            'kode_pos'      => $request->filled('postal_code') ? trim((string) $request->input('postal_code')) : null,
+            'telepon_posko' => $request->filled('phone') ? trim((string) $request->input('phone')) : null,
+            'active'        => $request->boolean('active', true),
         ]);
 
         AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Tambah stasiun baru', "{$s->kode} • St. {$s->nama}");
 
-        return response()->json([
-            'station' => [
-                'id'     => $s->id,
-                'code'   => $s->kode,
-                'name'   => $s->nama,
-                'line'   => $s->lin,
-                'hours'  => $s->jam_layanan,
-                'active' => (bool) $s->active,
-            ],
-        ]);
+        return response()->json(['station' => $this->mapStation($s)]);
     }
 
     /**
@@ -291,6 +279,16 @@ class StaffAdminController extends Controller
      */
     public function updateStation(Request $request, int $id)
     {
+        $request->validate([
+            'code'        => 'nullable|string|max:10',
+            'name'        => 'nullable|string|max:100',
+            'line'        => 'nullable|string|max:100',
+            'hours'       => 'nullable|string|max:30',
+            'address'     => 'nullable|string|max:255',
+            'postal_code' => 'nullable|string|regex:/^\d{5}$/',
+            'phone'       => 'nullable|string|max:30',
+        ]);
+
         $s = Stasiun::findOrFail($id);
 
         if ($request->filled('code')) {
@@ -305,6 +303,15 @@ class StaffAdminController extends Controller
         if ($request->filled('hours')) {
             $s->jam_layanan = trim($request->hours);
         }
+        if ($request->exists('address')) {
+            $s->alamat_posko = $request->filled('address') ? trim((string) $request->input('address')) : null;
+        }
+        if ($request->exists('postal_code')) {
+            $s->kode_pos = $request->filled('postal_code') ? trim((string) $request->input('postal_code')) : null;
+        }
+        if ($request->exists('phone')) {
+            $s->telepon_posko = $request->filled('phone') ? trim((string) $request->input('phone')) : null;
+        }
         if ($request->has('active')) {
             $s->active = $request->boolean('active');
         }
@@ -312,16 +319,22 @@ class StaffAdminController extends Controller
 
         AuditLog::record($request->user()->id, $request->user()->name . ' (Admin)', 'Ubah data stasiun', "{$s->kode} • St. {$s->nama}");
 
-        return response()->json([
-            'station' => [
-                'id'     => $s->id,
-                'code'   => $s->kode,
-                'name'   => $s->nama,
-                'line'   => $s->lin,
-                'hours'  => $s->jam_layanan ?? '04:00–24:00',
-                'active' => (bool) $s->active,
-            ],
-        ]);
+        return response()->json(['station' => $this->mapStation($s)]);
+    }
+
+    private function mapStation(Stasiun $s): array
+    {
+        return [
+            'id'          => $s->id,
+            'code'        => $s->kode,
+            'name'        => $s->nama,
+            'line'        => $s->lin,
+            'hours'       => $s->jam_layanan ?? '04:00–24:00',
+            'address'     => $s->alamat_posko,
+            'postal_code' => $s->kode_pos,
+            'phone'       => $s->telepon_posko,
+            'active'      => (bool) ($s->active ?? true),
+        ];
     }
 
     /**

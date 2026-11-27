@@ -302,7 +302,13 @@ export const reportApi = {
       report: Report
     }>(`/api/reports/${kode}/bast/cancel-payment`),
   shippingRates: (postal_code: string, report_code?: string) =>
-    api.post<{ configured: boolean; source: string; package?: PackageSpecs; couriers: ShippingRateOption[] }>(
+    api.post<{
+      configured: boolean
+      source: string
+      origin?: { station_name: string; postal_code: string; address: string }
+      package?: PackageSpecs
+      couriers: ShippingRateOption[]
+    }>(
       '/api/shipping/rates',
       { postal_code, ...(report_code ? { report_code } : {}) },
     ),
@@ -399,9 +405,9 @@ export const staffApi = {
     deleteCategory: (id: number) =>
       api.delete<{ deleted: boolean; deactivated?: boolean }>(`/api/staff/admin/categories/${id}`),
     stations: () => api.get<any[]>('/api/staff/admin/stations'),
-    storeStation: (data: { code: string; name: string; line: string; hours?: string; active?: boolean }) =>
+    storeStation: (data: { code: string; name: string; line: string; hours?: string; address?: string; postal_code?: string; phone?: string; active?: boolean }) =>
       api.post<{ station: any }>('/api/staff/admin/stations', data),
-    updateStation: (id: number, data: { code?: string; name?: string; line?: string; hours?: string; active?: boolean }) =>
+    updateStation: (id: number, data: { code?: string; name?: string; line?: string; hours?: string; address?: string; postal_code?: string; phone?: string; active?: boolean }) =>
       api.patch<{ station: any }>(`/api/staff/admin/stations/${id}`, data),
     deleteStation: (id: number) =>
       api.delete<{ deleted: boolean; deactivated?: boolean }>(`/api/staff/admin/stations/${id}`),

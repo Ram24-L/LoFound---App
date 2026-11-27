@@ -92,11 +92,12 @@ class LaporanBarangHilang extends Model
      */
     public function toReportArray(): array
     {
-        $this->loadMissing(['items.kategori', 'riwayat', 'stasiunDari', 'stasiunKe', 'pencocokan.barangTemuan', 'klaim.barangTemuan']);
+        $this->loadMissing(['items.kategori', 'riwayat', 'stasiunDari', 'stasiunKe', 'pencocokan.barangTemuan.stasiunTemuan', 'klaim.barangTemuan.stasiunTemuan']);
 
         $latestKlaim = $this->klaim->sortByDesc('id')->first();
         $latestBast  = $latestKlaim ? BastPengambilan::where('klaim_id', $latestKlaim->id)->latest()->first() : null;
         $foundItem   = $latestKlaim?->barangTemuan ?? $this->pencocokan->first()?->barangTemuan;
+        $originStasiun = $foundItem?->stasiunTemuan ?? $this->stasiunKe;
 
         return [
             'id'         => $this->kode,
@@ -144,6 +145,11 @@ class LaporanBarangHilang extends Model
             'packageWidthCm'     => $foundItem?->lebar_cm ? (int) $foundItem->lebar_cm : null,
             'packageHeightCm'    => $foundItem?->tinggi_cm ? (int) $foundItem->tinggi_cm : null,
             'packageValue'       => $foundItem ? (int) ($foundItem->estimasi_nilai ?? 250000) : null,
+            'originStation'      => $originStasiun?->nama,
+            'originStationCode'  => $originStasiun?->kode,
+            'originPostalCode'   => $originStasiun?->kode_pos,
+            'originAddress'      => $originStasiun?->alamat_posko,
+            'originHours'        => $originStasiun?->jam_layanan ?? '04:00–24:00',
         ];
     }
 }

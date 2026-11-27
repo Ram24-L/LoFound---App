@@ -21,6 +21,9 @@ export function BastScreen({ id }: { id: string }) {
   const [qrCode, setQrCode] = useState(r?.qrCode || r?.bastCode || 'KCI-2026-089')
   const bastTitleCode = r?.bastCode || qrCode
   const m = shippable ? method : 'A'
+  const poskoStation = r?.originStation || r?.to || 'Jakarta Kota'
+  const poskoHours = r?.originHours || '04:00–24:00'
+  const maskedNik = user?.nik ? `${user.nik.slice(0, 4)}************` : 'Terverifikasi'
 
   useEffect(() => {
     if (r?.qrCode) setQrCode(r.qrCode)
@@ -83,7 +86,7 @@ export function BastScreen({ id }: { id: string }) {
               </div>
               <div className="min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">NIK</dt>
-                <dd className="text-sm font-bold tabular-nums text-ink">3201************</dd>
+                <dd className="text-sm font-bold tabular-nums text-ink">{maskedNik}</dd>
               </div>
               <div className="min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">Barang</dt>
@@ -91,7 +94,7 @@ export function BastScreen({ id }: { id: string }) {
               </div>
               <div className="col-span-2 min-w-0">
                 <dt className="text-[11px] font-semibold text-muted">Lokasi Simpan</dt>
-                <dd className="break-words text-sm font-bold text-ink">Posko CS St. {r.to}</dd>
+                <dd className="break-words text-sm font-bold text-ink">Posko CS St. {poskoStation}</dd>
               </div>
             </dl>
           </div>
@@ -129,12 +132,12 @@ export function BastScreen({ id }: { id: string }) {
                         ['Nomor Laporan', `#${r.id}`],
                         ['Kode BAST / QR', qrCode],
                         ['Nama Pemilik', user?.full || user?.name || 'Penumpang KRL'],
-                        ['NIK', user?.nik || '3201************'],
+                        ['NIK', maskedNik],
                         ['Nama Barang', r.items[0]?.name || 'Barang Temuan'],
                         ['Kategori & Warna', `${r.items[0]?.category || '-'} / ${r.items[0]?.color || '-'}`],
                         ['Rute Kejadian', `St. ${r.from} -> St. ${r.to}`],
                         ['Tanggal Laporan', `${r.date}, ${r.time} WIB`],
-                        ['Lokasi Pengambilan', `Posko CS St. ${r.to}`],
+                        ['Lokasi Pengambilan', `Posko CS St. ${poskoStation}`],
                       ],
                       footerNote: 'Dokumen BAST Digital sah diterbitkan secara elektronik oleh sistem LoFound KAI Commuter.',
                     })
@@ -156,7 +159,7 @@ export function BastScreen({ id }: { id: string }) {
                     qrCode,
                     owner: user?.full || user?.name || 'Penumpang KRL',
                     item: r.items[0]?.name || 'Barang Temuan',
-                    route: `Posko CS St. ${r.to} (${r.from} -> ${r.to})`,
+                    route: `Posko CS St. ${poskoStation} (${r.from} -> ${r.to})`,
                     date: `${r.date} • ${r.updated} WIB`,
                   })
                   toast(`Tiket_BAST_${bastTitleCode}.png berhasil diunduh.`)
@@ -179,16 +182,25 @@ export function BastScreen({ id }: { id: string }) {
           </h2>
           <div role="radiogroup" className="flex flex-col gap-2.5">
             <MethodCard checked={m === 'A'} onClick={() => setMethod('A')} icon={Store} title="Ambil Mandiri di Stasiun" badge={<Badge tone="success">Gratis</Badge>}>
-              <p>Posko CS St. Jakarta Kota</p>
+              <p>Posko CS St. {poskoStation}</p>
+              {r.originAddress && <p className="text-[11px] leading-4 text-muted">{r.originAddress}</p>}
               <p className="flex items-center gap-1">
-                <Clock className="size-3.5" aria-hidden /> 06:00–22:00 WIB
+                <Clock className="size-3.5" aria-hidden /> {poskoHours} WIB
               </p>
-              <button onClick={(e) => (e.stopPropagation(), toast('Membuka peta Posko CS...', { tone: 'info' }))} className="mt-1 inline-flex min-h-9 items-center gap-1 font-bold text-primary hover:underline">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const q = encodeURIComponent(r.originAddress || `Stasiun ${poskoStation}`)
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank', 'noopener,noreferrer')
+                }}
+                className="mt-1 inline-flex min-h-9 items-center gap-1 font-bold text-primary hover:underline"
+              >
                 <MapPin className="size-3.5" aria-hidden /> Lihat di Peta
               </button>
             </MethodCard>
             <MethodCard checked={m === 'B'} disabled={!shippable} onClick={() => shippable && setMethod('B')} icon={shippable ? Truck : Lock} title="Kirim via Ekspedisi ke Rumah" badge={!shippable ? <Badge tone="neutral" icon={Lock}>Terkunci</Badge> : undefined}>
-              <p>Estimasi 1–2 hari kerja • mulai Rp 18.000</p>
+              <p>Tarif kurir dihitung otomatis sesuai asal St. {poskoStation}, tujuan &amp; berat paket.</p>
             </MethodCard>
             {!shippable && (
               <Banner tone="warn" icon={Lock}>
@@ -306,6 +318,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [couriers, setCouriers] = useState<ShippingRateOption[]>(DEFAULT_COURIERS)
   const [pkgSpecs, setPkgSpecs] = useState<PackageSpecs | null>(null)
+  const [originInfo, setOriginInfo] = useState<{ station_name: string; postal_code: string; address: string } | null>(null)
   const [overrideAmount, setOverrideAmount] = useState<number | null>(null)
   const [ratesLoading, setRatesLoading] = useState(false)
   const [courier, setCourier] = useState(initialDraft?.courier || r?.shippingCourier || DEFAULT_COURIERS[0].k)
@@ -379,6 +392,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
       .shippingRates(f.zip, id)
       .then((res) => {
         if (cancelled) return
+        if (res.origin) setOriginInfo(res.origin)
         if (res.package) setPkgSpecs(res.package)
         if (!res.couriers?.length) return
         setCouriers(res.couriers)
@@ -927,7 +941,19 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
         {phase !== 'pending' && (
           <>
             <section className="rounded-[20px] border border-line bg-white p-4">
-              <RouteConnector gap="gap-2" from="Posko CS St. Jakarta Kota" to={`Alamat Rumah: ${f.city || 'Bogor'}`} fromLabel="Dari" toLabel="Ke" />
+              {(() => {
+                const origName = originInfo?.station_name || r?.originStation || r?.to || 'Jakarta Kota'
+                const origZip = originInfo?.postal_code || r?.originPostalCode
+                return (
+                  <RouteConnector
+                    gap="gap-2"
+                    from={`Posko CS St. ${origName}${origZip ? ` (${origZip})` : ''}`}
+                    to={`Alamat Rumah: ${f.city || 'Isi kota tujuan'}`}
+                    fromLabel="Dari"
+                    toLabel="Ke"
+                  />
+                )
+              })()}
             </section>
             <section className="flex flex-col gap-4 rounded-[20px] border border-line bg-white p-4">
               <div className="flex items-center justify-between">

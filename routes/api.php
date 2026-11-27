@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Route;
 // Public endpoints
 Route::get('/home-stats', [HomeController::class, 'stats']);
 Route::get('/home-feed', [HomeController::class, 'feed']);
-Route::get('/stations', fn () => Stasiun::where('active', true)->orderBy('nama')->get(['id', 'kode', 'nama', 'lin', 'jam_layanan', 'active']));
+Route::get('/stations', fn () => Stasiun::where('active', true)->orderBy('nama')->get(['id', 'kode', 'nama', 'lin', 'jam_layanan', 'alamat_posko', 'kode_pos', 'telepon_posko', 'active']));
 Route::get('/categories', fn () => KategoriBarang::where('active', true)->get(['id', 'nama', 'ikon', 'shippable']));
 Route::get('/payment/config', function (PaymentGatewayService $pg) {
     return response()->json([

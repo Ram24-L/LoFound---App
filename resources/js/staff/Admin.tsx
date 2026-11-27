@@ -39,11 +39,24 @@ export function MasterDataPage() {
 
   // Station CRUD state
   const [stModal, setStModal] = useState<'add' | 'edit' | null>(null)
-  const [stForm, setStForm] = useState<{ id?: number; code: string; name: string; line: string; hours: string; active: boolean }>({
+  const [stForm, setStForm] = useState<{
+    id?: number
+    code: string
+    name: string
+    line: string
+    hours: string
+    postal_code: string
+    phone: string
+    address: string
+    active: boolean
+  }>({
     code: '',
     name: '',
     line: 'Lin Bogor',
     hours: '04:00–24:00',
+    postal_code: '',
+    phone: '',
+    address: '',
     active: true,
   })
   const [stErr, setStErr] = useState('')
@@ -145,29 +158,32 @@ export function MasterDataPage() {
       setStErr('Kode dan nama stasiun wajib diisi.')
       return
     }
+    const zipClean = stForm.postal_code.replace(/\D/g, '')
+    if (zipClean && zipClean.length !== 5) {
+      setStErr('Kode pos posko harus 5 digit angka (atau kosongkan).')
+      return
+    }
     setStErr('')
     setBusy(true)
+    const payload = {
+      code: stForm.code.trim().toUpperCase(),
+      name: stForm.name.trim(),
+      line: stForm.line,
+      hours: stForm.hours,
+      postal_code: zipClean || undefined,
+      phone: stForm.phone.trim() || undefined,
+      address: stForm.address.trim() || undefined,
+      active: stForm.active,
+    }
     try {
       if (stModal === 'edit' && stForm.id) {
-        const res = await staffApi.admin.updateStation(stForm.id, {
-          code: stForm.code.trim().toUpperCase(),
-          name: stForm.name.trim(),
-          line: stForm.line,
-          hours: stForm.hours,
-          active: stForm.active,
-        })
+        const res = await staffApi.admin.updateStation(stForm.id, payload)
         setStations((prev) => prev.map((x) => (x.id === stForm.id || x.code === stForm.code ? res.station : x)))
         toast(`Stasiun St. ${res.station.name} diperbarui.`)
       } else {
-        const res = await staffApi.admin.storeStation({
-          code: stForm.code.trim().toUpperCase(),
-          name: stForm.name.trim(),
-          line: stForm.line,
-          hours: stForm.hours,
-          active: stForm.active,
-        })
+        const res = await staffApi.admin.storeStation(payload)
         setStations((prev) => [...prev, res.station])
-        toast(`Stasiun baru St. ${res.station.name} ditambahkan ke PostgreSQL.`)
+        toast(`Stasiun baru St. ${res.station.name} ditambahkan ke database.`)
       }
       setStModal(null)
     } catch (error: any) {
@@ -238,7 +254,7 @@ export function MasterDataPage() {
       setAddUser(false)
       setUserErr('')
       setNu({ name: '', email: '', role: 'Petugas CS', station: 'Jakarta Kota' })
-      toast(`Akun staf baru (${nu.name}) berhasil ditambahkan ke PostgreSQL.`)
+      toast(`Akun staf baru (${nu.name}) berhasil ditambahkan ke database.`)
     } catch (error: any) {
       setUserErr(error.message || 'Gagal menambahkan staf.')
     } finally {
@@ -250,7 +266,7 @@ export function MasterDataPage() {
     <>
       <PageHead
         title="Data Master"
-        sub="Perubahan tersimpan otomatis ke PostgreSQL dan tercatat di log audit."
+        sub="Perubahan tersimpan otomatis ke database dan tercatat di log audit."
         actions={
           tab === 'cat' ? (
             <Button variant="cta" icon={Plus} onClick={() => setAddCat(true)}>
@@ -265,7 +281,7 @@ export function MasterDataPage() {
               variant="cta"
               icon={Plus}
               onClick={() => {
-                setStForm({ code: '', name: '', line: 'Lin Bogor', hours: '04:00–24:00', active: true })
+                setStForm({ code: '', name: '', line: 'Lin Bogor', hours: '04:00–24:00', postal_code: '', phone: '', address: '', active: true })
                 setStErr('')
                 setStModal('add')
               }}
@@ -410,7 +426,7 @@ export function MasterDataPage() {
             <table className="w-full">
               <thead className="bg-[#f6fafc]">
                 <tr>
-                  {['Kode', 'Nama Stasiun', 'Lin KRL', 'Jam Layanan', 'Tampil (Aktif)', 'Status', 'Aksi'].map((h) => (
+                  {['Kode', 'Nama Stasiun', 'Lin KRL', 'Posko Asal (Kurir)', 'Jam Layanan', 'Tampil (Aktif)', 'Status', 'Aksi'].map((h) => (
                     <th key={h} className={th}>
                       {h}
                     </th>
@@ -423,6 +439,10 @@ export function MasterDataPage() {
                     <td className={td + ' whitespace-nowrap font-mono font-bold'}>{s.code}</td>
                     <td className={td + ' font-bold'}>St. {s.name}</td>
                     <td className={td + ' whitespace-nowrap'}><Badge tone="neutral">{s.line}</Badge></td>
+                    <td className={td + ' max-w-[230px]'}>
+                      <p className="font-mono text-xs font-bold text-ink">{s.postal_code || 'Belum diisi'}</p>
+                      {s.address && <p className="truncate text-[11px] text-muted">{s.address}</p>}
+                    </td>
                     <td className={td + ' whitespace-nowrap text-muted'}>{s.hours}</td>
                     <td className={td}>
                       <MiniSwitch
@@ -457,6 +477,9 @@ export function MasterDataPage() {
                               name: s.name,
                               line: s.line,
                               hours: s.hours || '04:00–24:00',
+                              postal_code: s.postal_code || '',
+                              phone: s.phone || '',
+                              address: s.address || '',
                               active: !!s.active,
                             })
                             setStErr('')
@@ -548,7 +571,7 @@ export function MasterDataPage() {
         open={!!stModal}
         onClose={() => setStModal(null)}
         title={stModal === 'edit' ? `Ubah Stasiun St. ${stForm.name}` : 'Tambah Stasiun Baru'}
-        sub="Perubahan stasiun langsung tersimpan ke database PostgreSQL dan diperbarui di aplikasi penumpang."
+        sub="Perubahan stasiun langsung tersimpan ke database dan menjadi titik asal pengiriman Biteship."
         footer={
           <>
             <Button variant="ghost" onClick={() => setStModal(null)}>
@@ -621,6 +644,44 @@ export function MasterDataPage() {
               />
             )}
           </Field>
+          <Field label="Kode Pos Posko (Biteship Origin)">
+            {(a) => (
+              <input
+                {...a}
+                maxLength={5}
+                inputMode="numeric"
+                value={stForm.postal_code}
+                onChange={(e) => setStForm({ ...stForm, postal_code: e.target.value.replace(/\D/g, '') })}
+                placeholder="Contoh: 16124"
+                className={inputCls() + ' h-11 font-mono'}
+              />
+            )}
+          </Field>
+          <Field label="No. Telepon / WA Posko">
+            {(a) => (
+              <input
+                {...a}
+                value={stForm.phone}
+                onChange={(e) => setStForm({ ...stForm, phone: e.target.value })}
+                placeholder="0812xxxxxxxx"
+                className={inputCls() + ' h-11 font-mono'}
+              />
+            )}
+          </Field>
+          <div className="col-span-2">
+            <Field label="Alamat Lengkap Posko (Titik Penjemputan Kurir)">
+              {(a) => (
+                <textarea
+                  {...a}
+                  rows={2}
+                  value={stForm.address}
+                  onChange={(e) => setStForm({ ...stForm, address: e.target.value })}
+                  placeholder="Posko CS Stasiun ..., Jl. ..., Kecamatan, Kota"
+                  className={inputCls() + ' resize-none py-2.5'}
+                />
+              )}
+            </Field>
+          </div>
         </div>
       </Modal>
 
@@ -653,7 +714,7 @@ export function MasterDataPage() {
         open={addUser}
         onClose={() => setAddUser(false)}
         title="Tambah Staf Baru"
-        sub="Staf baru akan tersimpan ke database PostgreSQL dan dapat langsung masuk ke konsol."
+        sub="Staf baru akan tersimpan ke database dan dapat langsung masuk ke konsol."
         footer={
           <>
             <Button variant="ghost" onClick={() => setAddUser(false)}>
@@ -689,7 +750,7 @@ export function MasterDataPage() {
             {(a) => (
               <select {...a} value={nu.station} onChange={(e) => setNu({ ...nu, station: e.target.value })} className={inputCls() + ' h-11'}>
                 <option value="Pusat">Pusat</option>
-                {STATIONS.map((s) => (
+                {stations.map((s) => (
                   <option key={s.code} value={s.name}>{s.name}</option>
                 ))}
               </select>

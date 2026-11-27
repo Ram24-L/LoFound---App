@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Check, Clock, Copy, Eye, MapPin, Package, Phone, Printer, RefreshCw, RotateCcw, Truck, X, Zap } from 'lucide-react'
-import { SHIPMENTS, type Shipment } from '../lib/data'
-import { Badge, Banner, Button, cx, EmptyState, Field, inputCls, rupiah, useToast } from '../lib/ui'
+import { AlertCircle, Check, Clock, Copy, Eye, MapPin, Package, Phone, Printer, RefreshCw, RotateCcw, Store, Truck, X, Zap } from 'lucide-react'
+import { type Shipment } from '../lib/data'
+import { Badge, Banner, Button, cx, EmptyState, Field, inputCls, rupiah, useStations, useToast } from '../lib/ui'
 import { Modal, PageHead, Panel, Tabs, td, th } from './common'
 import { staffApi } from '../lib/api'
 import { downloadPdfDocument } from '../lib/export'
@@ -16,8 +16,10 @@ import {
 
 export function ShippingQueuePage() {
   const toast = useToast()
-  const [rows, setRows] = useState<Shipment[]>(SHIPMENTS)
+  const { stations } = useStations()
+  const [rows, setRows] = useState<Shipment[]>([])
   const [tab, setTab] = useState<Shipment['status']>('Menunggu Resi')
+  const [stationFilter, setStationFilter] = useState<string>('Semua')
   const [open, setOpen] = useState<Shipment | null>(null)
   const [detailNo, setDetailNo] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -31,7 +33,7 @@ export function ShippingQueuePage() {
     staffApi.logistics
       .inventory()
       .then((res) => {
-        if (res.shipments && res.shipments.length > 0) {
+        if (Array.isArray(res.shipments)) {
           setRows(res.shipments)
         }
       })
@@ -44,8 +46,9 @@ export function ShippingQueuePage() {
     return () => clearInterval(t)
   }, [])
 
-  const list = rows.filter((r) => r.status === tab)
-  const count = (s: Shipment['status']) => rows.filter((r) => r.status === s).length
+  const stationRows = stationFilter === 'Semua' ? rows : rows.filter((r) => (r.origin_station || 'Jakarta Kota') === stationFilter)
+  const list = stationRows.filter((r) => r.status === tab)
+  const count = (s: Shipment['status']) => stationRows.filter((r) => r.status === s).length
   const detailRow = detailNo ? rows.find((x) => x.no === detailNo) ?? null : null
 
   const close = () => {
@@ -72,6 +75,8 @@ export function ShippingQueuePage() {
         ['Nomor Resi (AWB)', labelAwb],
         ['Nomor Laporan', r.no || '-'],
         ['Kode BAST', r.bast_code || '-'],
+        ['Posko Asal (Pengirim)', `Posko CS St. ${r.origin_station || 'Jakarta Kota'}${r.origin_postal_code ? ` (${r.origin_postal_code})` : ''}`],
+        ['Alamat Penjemputan', r.origin_address || '-'],
         ['Barang', r.item_name || 'Barang Temuan'],
         ['Berat & Dimensi', `${pkg.chargeableGrams.toLocaleString('id-ID')} g (${pkg.kgText} kg)${pkg.dimensionsText ? ` • ${pkg.dimensionsText}` : ''}`],
         ['Nama Penerima', r.recipient || '-'],
@@ -173,19 +178,34 @@ export function ShippingQueuePage() {
 
   return (
     <>
-      <PageHead title="Antrian Pengiriman" sub="Pengiriman ekspedisi yang sudah dibayar penumpang dan diproses tim Logistik KAI." />
-      <div className="mb-4 flex items-center gap-3 overflow-x-auto">
-        <Tabs
-          value={tab}
-          onChange={setTab}
-          items={[
-            { v: 'Menunggu Resi', l: `Menunggu Resi (${count('Menunggu Resi')})` },
-            { v: 'Dikemas', l: `Dikemas (${count('Dikemas')})` },
-            { v: 'Dikirim', l: `Dikirim (${count('Dikirim')})` },
-            { v: 'Bermasalah', l: `Kendala (${count('Bermasalah')})` },
-            { v: 'Selesai', l: `Pengiriman Selesai (${count('Selesai')})` },
-          ]}
-        />
+      <PageHead title="Antrian Pengiriman" sub="Pengiriman ekspedisi multi-stasiun yang sudah dibayar penumpang dan dijemput langsung dari Posko CS asal." />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="overflow-x-auto">
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            items={[
+              { v: 'Menunggu Resi', l: `Menunggu Resi (${count('Menunggu Resi')})` },
+              { v: 'Dikemas', l: `Dikemas (${count('Dikemas')})` },
+              { v: 'Dikirim', l: `Dikirim (${count('Dikirim')})` },
+              { v: 'Bermasalah', l: `Kendala (${count('Bermasalah')})` },
+              { v: 'Selesai', l: `Pengiriman Selesai (${count('Selesai')})` },
+            ]}
+          />
+        </div>
+        <select
+          aria-label="Filter Posko Asal"
+          value={stationFilter}
+          onChange={(e) => setStationFilter(e.target.value)}
+          className={inputCls() + ' h-10 w-52 bg-white text-xs font-semibold'}
+        >
+          <option value="Semua">Semua Posko Stasiun</option>
+          {stations.map((s) => (
+            <option key={s.code} value={s.name}>
+              Posko St. {s.name}
+            </option>
+          ))}
+        </select>
       </div>
       <Panel>
         {list.length === 0 ? (
@@ -195,7 +215,7 @@ export function ShippingQueuePage() {
             <table className="w-full">
               <thead className="bg-[#f6fafc]">
                 <tr>
-                  {['No. Laporan', 'Penerima', 'Kurir', 'Tujuan', 'Dibayar', 'Status Kurir', 'Aksi'].map((h) => (
+                  {['No. Laporan', 'Posko Asal', 'Penerima', 'Kurir', 'Tujuan', 'Dibayar', 'Status Kurir', 'Aksi'].map((h) => (
                     <th key={h} className={th}>
                       {h}
                     </th>
@@ -219,6 +239,10 @@ export function ShippingQueuePage() {
                       <td className={td + ' whitespace-nowrap'}>
                         <p className="font-mono font-bold text-ink">{r.no}</p>
                         {r.item_name && <p className="max-w-[160px] truncate text-xs text-muted">{r.item_name}</p>}
+                      </td>
+                      <td className={td + ' whitespace-nowrap'}>
+                        <p className="font-semibold text-ink">St. {r.origin_station || 'Jakarta Kota'}</p>
+                        {r.origin_postal_code && <p className="font-mono text-[11px] text-muted">{r.origin_postal_code}</p>}
                       </td>
                       <td className={td}>
                         <p className="font-semibold text-ink">{r.recipient}</p>
@@ -539,9 +563,20 @@ export function ShippingQueuePage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-2 sm:col-span-2">
+                  <Store className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="text-muted">Posko Asal Penjemputan</p>
+                    <p className="font-bold text-ink">
+                      Posko CS St. {detailRow.origin_station || 'Jakarta Kota'}
+                      {detailRow.origin_postal_code ? ` (${detailRow.origin_postal_code})` : ''}
+                    </p>
+                    {detailRow.origin_address && <p className="leading-4 text-muted">{detailRow.origin_address}</p>}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 sm:col-span-2">
                   <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
                   <div className="min-w-0">
-                    <p className="text-muted">Alamat Pengiriman</p>
+                    <p className="text-muted">Alamat Tujuan Pengiriman</p>
                     <p className="leading-4 text-ink">
                       {detailRow.dest}
                       {detailRow.destination_postal_code && !detailRow.dest.includes(detailRow.destination_postal_code)

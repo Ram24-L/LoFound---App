@@ -77,7 +77,7 @@ export function TrackingScreen({ id }: { id: string }) {
     { t: s === 'pencarian' || s === 'diterima' ? 'Kandidat Barang Cocok' : 'Kandidat Barang Cocok Ditemukan!', time: candTime },
     { t: 'Verifikasi Klaim CS & Penerbitan BAST Digital', time: bastTime },
     {
-      t: s === 'dikirim' ? 'Pengiriman via Ekspedisi' : choseStationPickup ? `Pengambilan Mandiri di Posko St. ${r.to}` : 'Pengambilan di Stasiun / Pengiriman Ekspedisi',
+      t: s === 'dikirim' ? 'Pengiriman via Ekspedisi' : choseStationPickup ? `Pengambilan Mandiri di Posko St. ${r.originStation || r.to}` : 'Pengambilan di Stasiun / Pengiriman Ekspedisi',
       time: doneTime,
     },
   ]
@@ -334,7 +334,7 @@ export function TrackingScreen({ id }: { id: string }) {
             <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
               <span className="min-w-0 flex-1 break-words">
-                Pengambilan mandiri di Posko CS St. {r.to} telah dikonfirmasi. Tunjukkan kode QR BAST #{r.bastCode || 'KCI-2026-089'} kepada petugas saat mengambil barang.
+                Pengambilan mandiri di Posko CS St. {r.originStation || r.to} telah dikonfirmasi. Tunjukkan kode QR BAST #{r.bastCode || 'KCI-2026-089'} kepada petugas saat mengambil barang.
               </span>
             </div>
             <Button variant="cta" full icon={Ticket} onClick={() => go('bast', { id })}>
@@ -520,7 +520,7 @@ export function ClaimScreen({ id, candidates = ['FND-0412'] }: { id: string; can
       cat: r?.items?.[0]?.category || 'Elektronik',
       desc: `${r?.items?.[0]?.name || 'Barang'} • ${cid}`,
       found: 'Ditemukan baru-baru ini',
-      posko: `Posko CS St. ${r?.to || 'Manggarai'}`,
+      posko: `Posko CS St. ${r?.originStation || r?.to || 'Jakarta Kota'}`,
       match: 'Tinggi' as const,
     }
   })

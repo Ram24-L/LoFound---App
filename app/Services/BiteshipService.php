@@ -80,9 +80,17 @@ class BiteshipService
         ?int $widthCm = null,
         ?int $heightCm = null,
         ?string $itemName = null,
+        ?array $origin = null,
     ): array {
         $cleanZip = preg_replace('/\D+/', '', $destinationPostalCode) ?? '';
         $apiKey = (string) config('services.biteship.api_key', '');
+
+        $originPostal = (int) (preg_replace('/\D+/', '', (string) ($origin['postal_code'] ?? '')) ?: config('services.biteship.origin_postal_code', 11110));
+        $originSummary = [
+            'station_name' => (string) ($origin['station_name'] ?? 'Jakarta Kota'),
+            'postal_code'  => (string) $originPostal,
+            'address'      => (string) ($origin['address'] ?? config('services.biteship.origin_address', 'Posko CS Stasiun Jakarta Kota')),
+        ];
 
         $weight = max(50, $weightGrams);
         $value = max(1000, $itemValue);
@@ -104,6 +112,7 @@ class BiteshipService
             return [
                 'configured' => $this->isConfigured(),
                 'source'     => 'fallback',
+                'origin'     => $originSummary,
                 'package'    => $packageSummary,
                 'couriers'   => $this->fallbackCouriers($chargeableGrams),
             ];
@@ -128,7 +137,7 @@ class BiteshipService
                     'Accept'        => 'application/json',
                 ])
                 ->post($this->baseUrl() . '/rates/couriers', [
-                    'origin_postal_code'      => (int) config('services.biteship.origin_postal_code', 11110),
+                    'origin_postal_code'      => $originPostal,
                     'destination_postal_code' => (int) $cleanZip,
                     'couriers'                => (string) config('services.biteship.couriers', 'jne,pos,jnt,sicepat,anteraja'),
                     'items'                   => [$rateItem],
@@ -143,6 +152,7 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
+                    'origin'     => $originSummary,
                     'package'    => $packageSummary,
                     'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
@@ -153,6 +163,7 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
+                    'origin'     => $originSummary,
                     'package'    => $packageSummary,
                     'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
@@ -163,6 +174,7 @@ class BiteshipService
                 return [
                     'configured' => true,
                     'source'     => 'fallback',
+                    'origin'     => $originSummary,
                     'package'    => $packageSummary,
                     'couriers'   => $this->fallbackCouriers($chargeableGrams),
                 ];
@@ -171,6 +183,7 @@ class BiteshipService
             return [
                 'configured' => true,
                 'source'     => 'biteship',
+                'origin'     => $originSummary,
                 'package'    => $packageSummary,
                 'couriers'   => $normalized,
             ];
@@ -180,6 +193,7 @@ class BiteshipService
             return [
                 'configured' => true,
                 'source'     => 'fallback',
+                'origin'     => $originSummary,
                 'package'    => $packageSummary,
                 'couriers'   => $this->fallbackCouriers($chargeableGrams),
             ];
@@ -198,12 +212,19 @@ class BiteshipService
             return ['ok' => false, 'error' => 'Biteship API key belum dikonfigurasi.'];
         }
 
-        $bast->loadMissing(['klaim.laporan.items', 'klaim.laporan.user', 'klaim.barangTemuan']);
+        $bast->loadMissing([
+            'klaim.laporan.items',
+            'klaim.laporan.user',
+            'klaim.laporan.stasiunKe',
+            'klaim.barangTemuan.stasiunTemuan',
+        ]);
         $laporan = $bast->klaim?->laporan;
         $user = $laporan?->user;
         $barang = $bast->klaim?->barangTemuan;
         $itemName = $barang?->nama_barang ?: ($laporan?->items?->first()?->nama_barang ?: 'Barang Temuan KRL');
         $specs = $barang?->shippingSpecs();
+        $originStasiun = $barang?->stasiunTemuan ?? $laporan?->stasiunKe;
+        $originSpecs = $originStasiun?->originSpecs();
 
         [$company, $serviceType] = $this->resolveCourierPair($bast);
 
@@ -225,14 +246,19 @@ class BiteshipService
             $orderItem['height'] = $specs['height_cm'];
         }
 
+        $originContactName = $originSpecs['contact_name'] ?? (string) config('services.biteship.origin_name', 'Posko CS LoFound KAI Commuter');
+        $originContactPhone = $this->normalizePhone($originSpecs['contact_phone'] ?? (string) config('services.biteship.origin_phone', '081212345678'));
+        $originAddress = $originSpecs['address'] ?? (string) config('services.biteship.origin_address', 'Posko CS Stasiun Jakarta Kota');
+        $originPostalCode = (int) ($originSpecs['postal_code'] ?? config('services.biteship.origin_postal_code', 11110));
+
         $payload = [
-            'shipper_contact_name'      => (string) config('services.biteship.origin_name', 'Posko CS LoFound KAI Commuter'),
-            'shipper_contact_phone'     => $this->normalizePhone((string) config('services.biteship.origin_phone', '081212345678')),
+            'shipper_contact_name'      => $originContactName,
+            'shipper_contact_phone'     => $originContactPhone,
             'shipper_organization'      => 'LoFound KAI Commuter',
-            'origin_contact_name'       => (string) config('services.biteship.origin_name', 'Posko CS LoFound KAI Commuter'),
-            'origin_contact_phone'      => $this->normalizePhone((string) config('services.biteship.origin_phone', '081212345678')),
-            'origin_address'            => (string) config('services.biteship.origin_address', 'Posko CS Stasiun Jakarta Kota'),
-            'origin_postal_code'        => (int) config('services.biteship.origin_postal_code', 11110),
+            'origin_contact_name'       => $originContactName,
+            'origin_contact_phone'      => $originContactPhone,
+            'origin_address'            => $originAddress,
+            'origin_postal_code'        => $originPostalCode,
             'destination_contact_name'  => $destName,
             'destination_contact_phone' => $destPhone,
             'destination_address'       => $destAddr,

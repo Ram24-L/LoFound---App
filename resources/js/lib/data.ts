@@ -89,6 +89,11 @@ export type Report = {
   packageWidthCm?: number | null
   packageHeightCm?: number | null
   packageValue?: number | null
+  originStation?: string | null
+  originStationCode?: string | null
+  originPostalCode?: string | null
+  originAddress?: string | null
+  originHours?: string | null
 }
 
 export const STATUS_META: Record<ReportStatus, { label: string; tone: 'success' | 'info' | 'coral' | 'warn' | 'danger' | 'neutral'; action?: boolean; locked?: boolean }> = {
@@ -304,6 +309,11 @@ export type Shipment = {
   width_cm?: number | null
   height_cm?: number | null
   estimated_value?: number | null
+  origin_station?: string | null
+  origin_station_code?: string | null
+  origin_postal_code?: string | null
+  origin_address?: string | null
+  origin_phone?: string | null
 }
 export const SHIPMENTS: Shipment[] = [
   { no: 'LPR-2026-042', recipient: 'M. Ramdhan M.', courier: 'KAI Logistik Express', dest: 'Bogor Tengah, Bogor', paid: '2 Nov, 15:10', status: 'Menunggu Resi' },
