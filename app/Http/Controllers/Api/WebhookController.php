@@ -119,10 +119,32 @@ class WebhookController extends Controller
             }
 
             if ($event === 'order.price') {
+                $orderId = (string) ($request->input('order_id') ?? $request->input('data.order_id') ?? '');
+                $price = $request->input('price') ?? $request->input('data.price');
+
                 Log::info('Biteship order.price webhook received', [
-                    'order_id' => $request->input('order_id'),
-                    'price'    => $request->input('price'),
+                    'order_id' => $orderId,
+                    'price'    => $price,
                 ]);
+
+                if ($orderId !== '') {
+                    $bast = BastPengambilan::where('biteship_order_id', $orderId)->first();
+                    if ($bast) {
+                        $history = $bast->tracking_history ?? [];
+                        $priceNote = ($price !== null && is_numeric($price))
+                            ? 'Penyesuaian ongkir kurir menjadi Rp ' . number_format((int) $price, 0, ',', '.') . ' berdasarkan berat/volume aktual di ekspedisi.'
+                            : 'Terdapat penyesuaian ongkir dari pihak ekspedisi.';
+                        $history[] = [
+                            'status'     => 'price_updated',
+                            'note'       => $priceNote,
+                            'updated_at' => (string) ($request->input('updated_at') ?? $request->input('data.updated_at') ?? now()->toIso8601String()),
+                        ];
+                        $bast->tracking_history = $history;
+                        $bast->save();
+
+                        AuditLog::record(null, 'Biteship Webhook', 'Penyesuaian ongkir kurir', "{$bast->kode} • {$priceNote}");
+                    }
+                }
 
                 return response()->json(['ok' => true]);
             }

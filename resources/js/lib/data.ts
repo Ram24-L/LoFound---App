@@ -264,15 +264,22 @@ export const CLAIMS: Claim[] = [
 export type Shipment = {
   id?: number
   no: string
+  bast_code?: string
+  item_name?: string
   recipient: string
+  recipient_phone?: string | null
   courier: string
   dest: string
+  destination_postal_code?: string | null
+  ongkir?: number
   paid: string
   status: 'Menunggu Resi' | 'Dikemas' | 'Dikirim' | 'Selesai' | 'Bermasalah'
+  payment_status?: string | null
   awb?: string
   biteship_order_id?: string | null
   biteship_tracking_id?: string | null
   shipping_status?: string | null
+  tracking_history?: TrackingHistoryEntry[]
 }
 export const SHIPMENTS: Shipment[] = [
   { no: 'LPR-2026-042', recipient: 'M. Ramdhan M.', courier: 'KAI Logistik Express', dest: 'Bogor Tengah, Bogor', paid: '2 Nov, 15:10', status: 'Menunggu Resi' },

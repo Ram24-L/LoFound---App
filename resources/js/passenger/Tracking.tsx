@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, BellRing, Check, ChevronDown, Clock, FileCheck
 import { CANDIDATES as STATIC_CANDIDATES, type ReportStatus } from '../lib/data'
 import { Badge, Banner, Button, CategoryBadge, Checkbox, cx, Dialog, EmptyState, ErrorState, Field, inputCls, RadioDot, Skeleton, Toggle, useToast } from '../lib/ui'
 import { reportApi, uploadApi } from '../lib/api'
+import { cleanCourierName, getShippingSummary } from '../lib/shipping'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -160,39 +161,10 @@ export function TrackingScreen({ id }: { id: string }) {
                     {active && i === 2 && s === 'ditolak' && <Badge tone="danger" icon={XCircle}>Belum Disetujui</Badge>}
                     {active && i === 4 && s === 'bast' && !choseStationPickup && <Badge tone="coral">Pilih Metode</Badge>}
                     {active && i === 4 && s === 'bast' && choseStationPickup && <Badge tone="success">Siap Diambil</Badge>}
-                    {active && i === 4 && s === 'dikirim' && (
-                      <Badge
-                        tone={
-                          ['courier_not_found', 'cancelled', 'rejected', 'disposed', 'return_in_transit', 'returned'].includes((r.shippingStatus || '').toLowerCase())
-                            ? 'danger'
-                            : r.shippingStatus === 'on_hold'
-                              ? 'warn'
-                              : 'info'
-                        }
-                      >
-                        {r.shippingStatus === 'courier_not_found'
-                          ? 'Kurir Tidak Ditemukan'
-                          : r.shippingStatus === 'cancelled'
-                            ? 'Dibatalkan Kurir'
-                            : r.shippingStatus === 'rejected'
-                              ? 'Paket Ditolak'
-                              : r.shippingStatus === 'disposed'
-                                ? 'Gagal Terkirim'
-                                : r.shippingStatus === 'return_in_transit' || r.shippingStatus === 'returned'
-                                  ? 'Retur ke Posko'
-                                  : r.shippingStatus === 'on_hold'
-                                    ? 'Tertunda Sementara'
-                                    : r.shippingStatus === 'dropping_off'
-                                      ? 'Diantar ke Alamat'
-                                      : r.shippingStatus === 'in_transit'
-                                        ? 'Dalam Perjalanan'
-                                        : r.shippingStatus === 'picked'
-                                          ? 'Dijemput Kurir'
-                                          : r.awb
-                                            ? 'Menunggu Kurir'
-                                            : 'Diproses Logistik'}
-                      </Badge>
-                    )}
+                    {active && i === 4 && s === 'dikirim' && (() => {
+                      const shipMeta = getShippingSummary({ shippingStatus: r.shippingStatus, reportStatus: r.status, awb: r.awb })
+                      return <Badge tone={shipMeta.shortTone}>{shipMeta.shortBadge}</Badge>
+                    })()}
                   </div>
                   {active && activePanel(i)}
                 </li>
@@ -203,9 +175,9 @@ export function TrackingScreen({ id }: { id: string }) {
         {r.items.length > 1 && !refreshing && view !== 'error' && <p className="text-center text-xs text-muted">Menampilkan progres untuk #{r.id}-{item.sub}</p>}
         {s === 'selesai' && !refreshing && view !== 'error' && (r.awb || r.shippingCourier) && (
           <div className="rounded-[20px] border border-[#c6efd8] bg-mint p-4">
-            <p className="text-xs font-bold text-success">Paket Ekspedisi Telah Diterima</p>
+            <p className="text-xs font-bold text-success">Pengiriman Telah Selesai</p>
             <p className="mt-1 text-xs text-muted">
-              {r.shippingCourier || 'Ekspedisi'} {r.awb ? `• Resi ${r.awb}` : ''}
+              {cleanCourierName(r.shippingCourier)} {r.awb ? `• Resi ${r.awb}` : ''}
             </p>
             <Button variant="outline" size="sm" full icon={Ticket} className="mt-3 bg-white" onClick={() => go('shipping', { id })}>
               Lihat Resi & Riwayat Pengiriman

@@ -389,6 +389,23 @@ class BiteshipShippingTest extends TestCase
         $invRes = $this->actingAs($logistik)->getJson('/api/staff/logistics/inventory')->assertOk();
         $row = collect($invRes->json('shipments'))->firstWhere('bast_code', 'BAST-2026-953');
         $this->assertSame('Bermasalah', $row['status'] ?? null);
+        $this->assertSame(21500, $row['ongkir'] ?? null);
+        $this->assertSame('16610', $row['destination_postal_code'] ?? null);
+        $this->assertArrayHasKey('tracking_history', $row ?? []);
+        $this->assertSame('Headphone Hitam', $row['item_name'] ?? null);
+
+        // 1b. order.price adjustment logs a price_updated timeline entry without disrupting status
+        $this->postJson('/api/webhooks/shipping', [
+            'event'    => 'order.price',
+            'order_id' => 'bshp-order-953',
+            'price'    => 92000,
+        ])->assertOk()->assertJsonPath('ok', true);
+
+        $freshAfterPrice = $bast->fresh();
+        $this->assertSame('courier_not_found', $freshAfterPrice->shipping_status);
+        $lastEntry = collect($freshAfterPrice->tracking_history)->last();
+        $this->assertSame('price_updated', $lastEntry['status'] ?? null);
+        $this->assertStringContainsString('Rp 92.000', $lastEntry['note'] ?? '');
 
         // 2. on_hold -> keeps non-completed status & marks shipping_status = on_hold
         $this->postJson('/api/webhooks/shipping', [

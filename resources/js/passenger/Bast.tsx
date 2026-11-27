@@ -4,6 +4,7 @@ import { Badge, Banner, Button, cx, Field, inputCls, QRCode, RadioDot, RouteConn
 import type { ShippingRateOption } from '../lib/data'
 import { getTabToken, reportApi } from '../lib/api'
 import { downloadPdfDocument, downloadTicketImage } from '../lib/export'
+import { cleanCourierName, formatTrackingEvent, formatTrackingTimestamp, getShippingSummary, SHIPPING_MILESTONES } from '../lib/shipping'
 import { useApp } from './ctx'
 import { Screen, TopBar } from './shell'
 
@@ -276,130 +277,6 @@ function formatPaymentMethod(paymentType: string | null | undefined): string {
   return map[paymentType.toLowerCase()] || paymentType.replace(/_/g, ' ').toUpperCase()
 }
 
-function cleanCourierName(name: string | null | undefined): string {
-  const raw = (name || '').trim()
-  if (!raw) return 'Ekspedisi'
-  const parts = raw.split(/\s+/)
-  if (parts.length >= 2 && parts[0].toLowerCase() === parts[1].toLowerCase()) {
-    return parts.slice(1).join(' ')
-  }
-  return raw
-}
-
-function normalizeShipStatus(status: string | null | undefined): string {
-  return (status || '')
-    .trim()
-    .replace(/([a-z])([A-Z])/g, '$1_$2')
-    .replace(/[-\s]+/g, '_')
-    .toLowerCase()
-}
-
-const FAILED_SHIP_STATUSES = ['courier_not_found', 'cancelled', 'rejected', 'disposed']
-const RETURN_SHIP_STATUSES = ['return_in_transit', 'returned']
-const HOLD_SHIP_STATUSES = ['on_hold']
-
-function formatTrackingEvent(entry: { status?: string; note?: string; updated_at?: string }): {
-  title: string
-  desc: string
-  tone: 'success' | 'info' | 'warn' | 'danger'
-} {
-  const norm = normalizeShipStatus(entry.status || entry.note)
-  const dict: Record<string, { title: string; desc: string; tone: 'success' | 'info' | 'warn' | 'danger' }> = {
-    confirmed: {
-      title: 'Pesanan Pengiriman Dikonfirmasi',
-      desc: 'Nomor resi telah terbit dan paket siap diserahkan ke kurir.',
-      tone: 'info',
-    },
-    scheduled: {
-      title: 'Penjemputan Dijadwalkan',
-      desc: 'Penjemputan paket telah dijadwalkan bersama pihak kurir.',
-      tone: 'info',
-    },
-    allocated: {
-      title: 'Kurir Ditugaskan',
-      desc: 'Kurir sedang bersiap menjemput paket di Posko CS.',
-      tone: 'info',
-    },
-    picking_up: {
-      title: 'Kurir Menuju Lokasi Penjemputan',
-      desc: 'Kurir dalam perjalanan menjemput paket dari Posko CS.',
-      tone: 'info',
-    },
-    picked: {
-      title: 'Paket Telah Dijemput Kurir',
-      desc: 'Paket telah diserahkan ke kurir dan menuju gudang sortir.',
-      tone: 'info',
-    },
-    in_transit: {
-      title: 'Paket Dalam Perjalanan',
-      desc: 'Paket sedang dalam perjalanan menuju kota tujuan.',
-      tone: 'info',
-    },
-    dropping_off: {
-      title: 'Paket Sedang Diantar ke Alamat',
-      desc: 'Kurir sedang menuju alamat penerima.',
-      tone: 'info',
-    },
-    on_hold: {
-      title: 'Pengiriman Tertunda Sementara',
-      desc: 'Kurir mengalami kendala penjemputan/antar dan akan menjadwalkan ulang.',
-      tone: 'warn',
-    },
-    delivered: {
-      title: 'Paket Telah Diterima',
-      desc: 'Paket telah tiba di alamat tujuan dan diterima.',
-      tone: 'success',
-    },
-    courier_not_found: {
-      title: 'Kurir Penjemput Tidak Ditemukan',
-      desc: 'Tidak ada kurir tersedia saat ini. Petugas logistik akan menjadwalkan ulang penjemputan.',
-      tone: 'danger',
-    },
-    cancelled: {
-      title: 'Pengiriman Dibatalkan',
-      desc: 'Order pengiriman dibatalkan. Petugas logistik akan memproses pengiriman ulang.',
-      tone: 'danger',
-    },
-    rejected: {
-      title: 'Paket Ditolak Penerima',
-      desc: 'Pengiriman ditolak saat pengantaran dan akan dikembalikan ke posko.',
-      tone: 'danger',
-    },
-    disposed: {
-      title: 'Pengiriman Tidak Dapat Diteruskan',
-      desc: 'Paket tidak dapat diteruskan oleh ekspedisi. Hubungi Posko CS untuk informasi lanjut.',
-      tone: 'danger',
-    },
-    return_in_transit: {
-      title: 'Paket Sedang Dikembalikan ke Posko',
-      desc: 'Pengiriman gagal diterima dan sedang dalam perjalanan kembali ke Posko CS.',
-      tone: 'danger',
-    },
-    returned: {
-      title: 'Paket Kembali ke Posko CS',
-      desc: 'Paket telah diterima kembali di Posko CS. Hubungi petugas untuk pengiriman ulang.',
-      tone: 'danger',
-    },
-  }
-
-  const mapped = dict[norm] ?? {
-    title: entry.status || 'Pembaruan Pengiriman',
-    desc: '',
-    tone: 'info' as const,
-  }
-  const noteRaw = (entry.note || '').trim()
-  const isRawCode =
-    !noteRaw ||
-    normalizeShipStatus(noteRaw) === norm ||
-    /^(confirmed|scheduled|allocated|picking_up|picked|in_transit|dropping_off|on_hold|delivered|courier_not_found|cancelled|rejected|disposed|return_in_transit|returned)$/i.test(noteRaw)
-
-  return {
-    title: mapped.title,
-    desc: !isRawCode ? noteRaw : mapped.desc,
-    tone: mapped.tone,
-  }
-}
-
 type ShippingFormData = { name: string; wa: string; addr: string; city: string; zip: string }
 type ShippingDraft = { f?: Partial<ShippingFormData>; courier?: string; insure?: boolean }
 
@@ -456,36 +333,20 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   // Real package status from backend (controlled by Petugas Logistik / Biteship Webhook)
   const courierLabel = cleanCourierName(r?.shippingCourier || courier)
   const realAwb = r?.awb || 'Menunggu nomor resi kurir'
-  const shipNorm = normalizeShipStatus(r?.shippingStatus)
-  const isShipFailed = FAILED_SHIP_STATUSES.includes(shipNorm)
-  const isShipReturn = RETURN_SHIP_STATUSES.includes(shipNorm)
-  const isShipHold = HOLD_SHIP_STATUSES.includes(shipNorm)
-  const isDelivered = !isShipFailed && !isShipReturn && (r?.status === 'selesai' || shipNorm === 'delivered')
-  const isShippingTransit =
-    !isShipFailed &&
-    !isShipReturn &&
-    !isShipHold &&
-    (['picked', 'dropping_off', 'in_transit'].includes(shipNorm) || (shipNorm === '' && Boolean(r?.awb)))
-
-  // 4-stage Shopee-style milestones: 0=Dikemas, 1=Dijemput, 2=Dikirim, 3=Tiba
-  const milestoneDoneCount = isDelivered
-    ? 4
-    : isShipFailed || isShipReturn || isShipHold
-      ? 0
-      : ['in_transit', 'dropping_off'].includes(shipNorm)
-        ? 2
-        : shipNorm === 'picked' || isShippingTransit
-          ? 1
-          : 0
-  const milestoneActiveIdx = isDelivered
-    ? -1
-    : isShipFailed || isShipReturn || isShipHold
-      ? 0
-      : ['in_transit', 'dropping_off'].includes(shipNorm)
-        ? 2
-        : shipNorm === 'picked'
-          ? 1
-          : 0
+  const shipSummary = getShippingSummary({
+    shippingStatus: r?.shippingStatus,
+    reportStatus: r?.status,
+    awb: r?.awb,
+  })
+  const {
+    shipNorm,
+    isShipFailed,
+    isShipReturn,
+    isShipHold,
+    isDelivered,
+    milestoneDoneCount,
+    milestoneActiveIdx,
+  } = shipSummary
 
   useEffect(() => {
     if (phase !== 'form') return
@@ -689,56 +550,9 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const paymentMethodLabel = formatPaymentMethod(paymentType)
 
   if (phase === 'paid') {
-    const isIssue = isShipFailed || isShipReturn
+    const isIssue = shipSummary.isIssue
     const heroIsTransit = !isDelivered && !isIssue && !isShipHold && (shipNorm === 'dropping_off' || shipNorm === 'in_transit' || shipNorm === 'picked')
-    const topTitle = isShipFailed
-      ? 'Kendala Pengiriman'
-      : isShipReturn
-        ? 'Pengembalian Paket'
-        : isShipHold
-          ? 'Pengiriman Tertunda'
-          : isDelivered
-            ? 'Pesanan Selesai'
-            : heroIsTransit
-              ? 'Lacak Pengiriman'
-              : 'Status Pengiriman'
-    const heroTitle =
-      shipNorm === 'courier_not_found'
-        ? 'Kurir Tidak Ditemukan'
-        : shipNorm === 'cancelled'
-          ? 'Pengiriman Dibatalkan Kurir'
-          : shipNorm === 'rejected'
-            ? 'Paket Ditolak Saat Pengiriman'
-            : shipNorm === 'disposed'
-              ? 'Pengiriman Gagal Diteruskan'
-              : shipNorm === 'returned'
-                ? 'Paket Kembali ke Posko CS'
-                : shipNorm === 'return_in_transit'
-                  ? 'Paket Sedang Dikembalikan'
-                  : isShipHold
-                    ? 'Pengiriman Tertunda Sementara'
-                    : isDelivered
-                      ? 'Paket Telah Diterima'
-                      : shipNorm === 'dropping_off'
-                        ? 'Kurir Menuju Alamat Anda'
-                        : heroIsTransit
-                          ? 'Paket Dalam Perjalanan'
-                          : 'Pembayaran Berhasil'
-    const heroBadge = isShipFailed
-      ? 'KENDALA KURIR • Dijadwalkan Ulang Logistik'
-      : isShipReturn
-        ? 'RETUR KE POSKO • Hubungi Petugas CS'
-        : isShipHold
-          ? 'ON HOLD • Pengiriman Tertunda Sementara'
-          : isDelivered
-            ? 'TERKIRIM • Pesanan Selesai'
-            : shipNorm === 'dropping_off'
-              ? 'DIANTAR KURIR • Siapkan Penerima'
-              : heroIsTransit
-                ? 'DALAM PENGIRIMAN • Pantau Berkala'
-                : r?.awb
-                  ? 'LUNAS • Menunggu Penjemputan Kurir'
-                  : 'LUNAS • Sedang Disiapkan Logistik'
+    const { topTitle, heroTitle, heroBadge } = shipSummary
 
     return (
       <Screen
@@ -895,7 +709,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                 style={{ width: `${Math.min(100, Math.max(0, (milestoneDoneCount - (isDelivered ? 1 : 0)) / 3) * 75)}%` }}
                 aria-hidden
               />
-              {['Dikemas', 'Dijemput', 'Dikirim', 'Tiba'].map((label, idx) => {
+              {SHIPPING_MILESTONES.map((label, idx) => {
                 const isDone = idx < milestoneDoneCount
                 const isCurr = idx === milestoneActiveIdx
                 const isErrorNode = isIssue && idx === 0
@@ -989,13 +803,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                         {ev.desc && <p className="text-[11px] leading-4 text-muted">{ev.desc}</p>}
                         {h.updated_at && (
                           <p className="text-[11px] tabular-nums text-soft">
-                            {new Date(h.updated_at).toLocaleString('id-ID', {
-                              day: 'numeric',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}{' '}
-                            WIB
+                            {formatTrackingTimestamp(h.updated_at)}
                           </p>
                         )}
                       </li>

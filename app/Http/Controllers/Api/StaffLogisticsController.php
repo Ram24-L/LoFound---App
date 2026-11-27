@@ -21,7 +21,7 @@ class StaffLogisticsController extends Controller
     public function inventory(Request $request)
     {
         // 1. Expedition shipments from BAST
-        $shipments = BastPengambilan::with(['klaim.laporan.user', 'klaim.barangTemuan'])
+        $shipments = BastPengambilan::with(['klaim.laporan.user', 'klaim.laporan.items', 'klaim.barangTemuan'])
             ->where('metode_ambil', 'ekspedisi')
             ->orderByDesc('created_at')
             ->get()
@@ -45,18 +45,24 @@ class StaffLogisticsController extends Controller
                 }
 
                 return [
-                    'id'                   => $bast->id,
-                    'no'                   => $laporan ? $laporan->kode : $bast->kode,
-                    'bast_code'            => $bast->kode,
-                    'recipient'            => $bast->recipient_name ?: ($user ? $user->name : 'Penumpang KRL'),
-                    'courier'              => $bast->kurir ?? 'KAI Logistik Express',
-                    'dest'                 => $bast->alamat_kirim ?? 'Bogor Tengah, Bogor',
-                    'paid'                 => $bast->created_at->format('j M, H:i'),
-                    'status'               => $status,
-                    'awb'                  => $bast->nomor_resi,
-                    'biteship_order_id'    => $bast->biteship_order_id,
-                    'biteship_tracking_id' => $bast->biteship_tracking_id,
-                    'shipping_status'      => $bast->shipping_status,
+                    'id'                      => $bast->id,
+                    'no'                      => $laporan ? $laporan->kode : $bast->kode,
+                    'bast_code'               => $bast->kode,
+                    'item_name'               => $barang?->nama_barang ?: ($laporan?->items?->first()?->nama_barang ?? 'Barang Temuan'),
+                    'recipient'               => $bast->recipient_name ?: ($user ? $user->name : 'Penumpang KRL'),
+                    'recipient_phone'         => $bast->recipient_phone ?: ($user?->phone ?? null),
+                    'courier'                 => $bast->kurir ?? 'KAI Logistik Express',
+                    'dest'                    => $bast->alamat_kirim ?? 'Bogor Tengah, Bogor',
+                    'destination_postal_code' => $bast->destination_postal_code,
+                    'ongkir'                  => (int) ($bast->ongkir ?? 0),
+                    'paid'                    => $bast->created_at->format('j M, H:i'),
+                    'status'                  => $status,
+                    'payment_status'          => $bast->status_bayar,
+                    'awb'                     => $bast->nomor_resi,
+                    'biteship_order_id'       => $bast->biteship_order_id,
+                    'biteship_tracking_id'    => $bast->biteship_tracking_id,
+                    'shipping_status'         => $bast->shipping_status,
+                    'tracking_history'        => $bast->tracking_history ?? [],
                 ];
             });
 
@@ -224,7 +230,7 @@ class StaffLogisticsController extends Controller
             'status'  => $statusLabel,
             'awb'     => $awb,
             'message' => $action === 'delivered'
-                ? 'Simulasi pengiriman selesai: Paket telah diterima penumpang.'
+                ? 'Pengiriman telah selesai: Paket telah diterima penumpang.'
                 : ($action === 'ship' ? 'Ditandai sudah diserahkan ke kurir.' : 'Resi pengiriman disimpan.'),
         ]);
     }
