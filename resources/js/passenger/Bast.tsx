@@ -294,65 +294,109 @@ function normalizeShipStatus(status: string | null | undefined): string {
     .toLowerCase()
 }
 
-function formatTrackingEvent(entry: { status?: string; note?: string; updated_at?: string }): { title: string; desc: string } {
+const FAILED_SHIP_STATUSES = ['courier_not_found', 'cancelled', 'rejected', 'disposed']
+const RETURN_SHIP_STATUSES = ['return_in_transit', 'returned']
+const HOLD_SHIP_STATUSES = ['on_hold']
+
+function formatTrackingEvent(entry: { status?: string; note?: string; updated_at?: string }): {
+  title: string
+  desc: string
+  tone: 'success' | 'info' | 'warn' | 'danger'
+} {
   const norm = normalizeShipStatus(entry.status || entry.note)
-  const dict: Record<string, { title: string; desc: string }> = {
+  const dict: Record<string, { title: string; desc: string; tone: 'success' | 'info' | 'warn' | 'danger' }> = {
     confirmed: {
       title: 'Pesanan Pengiriman Dikonfirmasi',
       desc: 'Nomor resi telah terbit dan paket siap diserahkan ke kurir.',
+      tone: 'info',
+    },
+    scheduled: {
+      title: 'Penjemputan Dijadwalkan',
+      desc: 'Penjemputan paket telah dijadwalkan bersama pihak kurir.',
+      tone: 'info',
     },
     allocated: {
       title: 'Kurir Ditugaskan',
       desc: 'Kurir sedang bersiap menjemput paket di Posko CS.',
+      tone: 'info',
     },
     picking_up: {
       title: 'Kurir Menuju Lokasi Penjemputan',
       desc: 'Kurir dalam perjalanan menjemput paket dari Posko CS.',
+      tone: 'info',
     },
     picked: {
       title: 'Paket Telah Dijemput Kurir',
       desc: 'Paket telah diserahkan ke kurir dan menuju gudang sortir.',
+      tone: 'info',
     },
     in_transit: {
       title: 'Paket Dalam Perjalanan',
       desc: 'Paket sedang dalam perjalanan menuju kota tujuan.',
+      tone: 'info',
     },
     dropping_off: {
       title: 'Paket Sedang Diantar ke Alamat',
       desc: 'Kurir sedang menuju alamat penerima.',
+      tone: 'info',
     },
     on_hold: {
       title: 'Pengiriman Tertunda Sementara',
       desc: 'Kurir mengalami kendala penjemputan/antar dan akan menjadwalkan ulang.',
+      tone: 'warn',
     },
     delivered: {
       title: 'Paket Telah Diterima',
       desc: 'Paket telah tiba di alamat tujuan dan diterima.',
+      tone: 'success',
+    },
+    courier_not_found: {
+      title: 'Kurir Penjemput Tidak Ditemukan',
+      desc: 'Tidak ada kurir tersedia saat ini. Petugas logistik akan menjadwalkan ulang penjemputan.',
+      tone: 'danger',
     },
     cancelled: {
       title: 'Pengiriman Dibatalkan',
-      desc: 'Order pengiriman dibatalkan oleh pihak ekspedisi.',
+      desc: 'Order pengiriman dibatalkan. Petugas logistik akan memproses pengiriman ulang.',
+      tone: 'danger',
     },
     rejected: {
       title: 'Paket Ditolak Penerima',
-      desc: 'Pengiriman gagal diterima dan akan dikembalikan ke posko.',
+      desc: 'Pengiriman ditolak saat pengantaran dan akan dikembalikan ke posko.',
+      tone: 'danger',
+    },
+    disposed: {
+      title: 'Pengiriman Tidak Dapat Diteruskan',
+      desc: 'Paket tidak dapat diteruskan oleh ekspedisi. Hubungi Posko CS untuk informasi lanjut.',
+      tone: 'danger',
+    },
+    return_in_transit: {
+      title: 'Paket Sedang Dikembalikan ke Posko',
+      desc: 'Pengiriman gagal diterima dan sedang dalam perjalanan kembali ke Posko CS.',
+      tone: 'danger',
     },
     returned: {
-      title: 'Paket Dikembalikan ke Posko',
-      desc: 'Paket sedang dalam proses pengembalian ke Posko CS.',
+      title: 'Paket Kembali ke Posko CS',
+      desc: 'Paket telah diterima kembali di Posko CS. Hubungi petugas untuk pengiriman ulang.',
+      tone: 'danger',
     },
   }
 
-  const mapped = dict[norm] ?? { title: entry.status || 'Pembaruan Pengiriman', desc: '' }
+  const mapped = dict[norm] ?? {
+    title: entry.status || 'Pembaruan Pengiriman',
+    desc: '',
+    tone: 'info' as const,
+  }
   const noteRaw = (entry.note || '').trim()
   const isRawCode =
     !noteRaw ||
     normalizeShipStatus(noteRaw) === norm ||
-    /^(confirmed|allocated|picking_up|picked|in_transit|dropping_off|on_hold|delivered|cancelled|rejected|returned)$/i.test(noteRaw)
+    /^(confirmed|scheduled|allocated|picking_up|picked|in_transit|dropping_off|on_hold|delivered|courier_not_found|cancelled|rejected|disposed|return_in_transit|returned)$/i.test(noteRaw)
 
   return {
     title: mapped.title,
     desc: !isRawCode ? noteRaw : mapped.desc,
+    tone: mapped.tone,
   }
 }
 
@@ -413,24 +457,34 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const courierLabel = cleanCourierName(r?.shippingCourier || courier)
   const realAwb = r?.awb || 'Menunggu nomor resi kurir'
   const shipNorm = normalizeShipStatus(r?.shippingStatus)
-  const isDelivered = r?.status === 'selesai' || shipNorm === 'delivered'
-  const isShippingTransit = ['picked', 'dropping_off', 'in_transit', 'on_hold'].includes(shipNorm) || (Boolean(r?.awb) && !['confirmed', 'allocated', 'picking_up'].includes(shipNorm))
+  const isShipFailed = FAILED_SHIP_STATUSES.includes(shipNorm)
+  const isShipReturn = RETURN_SHIP_STATUSES.includes(shipNorm)
+  const isShipHold = HOLD_SHIP_STATUSES.includes(shipNorm)
+  const isDelivered = !isShipFailed && !isShipReturn && (r?.status === 'selesai' || shipNorm === 'delivered')
+  const isShippingTransit =
+    !isShipFailed &&
+    !isShipReturn &&
+    !isShipHold &&
+    (['picked', 'dropping_off', 'in_transit'].includes(shipNorm) || (shipNorm === '' && Boolean(r?.awb)))
+
   // 4-stage Shopee-style milestones: 0=Dikemas, 1=Dijemput, 2=Dikirim, 3=Tiba
   const milestoneDoneCount = isDelivered
     ? 4
-    : ['in_transit', 'dropping_off', 'on_hold'].includes(shipNorm)
-      ? 2
-      : shipNorm === 'picked' || isShippingTransit
-        ? 1
-        : 0
+    : isShipFailed || isShipReturn || isShipHold
+      ? 0
+      : ['in_transit', 'dropping_off'].includes(shipNorm)
+        ? 2
+        : shipNorm === 'picked' || isShippingTransit
+          ? 1
+          : 0
   const milestoneActiveIdx = isDelivered
     ? -1
-    : ['in_transit', 'dropping_off', 'on_hold'].includes(shipNorm)
-      ? 2
-      : shipNorm === 'picked'
-        ? 1
-        : r?.awb
-          ? 0
+    : isShipFailed || isShipReturn || isShipHold
+      ? 0
+      : ['in_transit', 'dropping_off'].includes(shipNorm)
+        ? 2
+        : shipNorm === 'picked'
+          ? 1
           : 0
 
   useEffect(() => {
@@ -635,24 +689,56 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const paymentMethodLabel = formatPaymentMethod(paymentType)
 
   if (phase === 'paid') {
-    const heroIsTransit = !isDelivered && (shipNorm === 'dropping_off' || shipNorm === 'in_transit' || shipNorm === 'picked' || shipNorm === 'on_hold')
-    const topTitle = isDelivered ? 'Pesanan Selesai' : heroIsTransit ? 'Lacak Pengiriman' : 'Status Pengiriman'
-    const heroTitle = isDelivered
-      ? 'Paket Telah Diterima'
-      : shipNorm === 'dropping_off'
-        ? 'Kurir Menuju Alamat Anda'
-        : heroIsTransit
-          ? 'Paket Dalam Perjalanan'
-          : 'Pembayaran Berhasil'
-    const heroBadge = isDelivered
-      ? 'TERKIRIM • Pesanan Selesai'
-      : shipNorm === 'dropping_off'
-        ? 'DIANTAR KURIR • Siapkan Penerima'
-        : heroIsTransit
-          ? 'DALAM PENGIRIMAN • Pantau Berkala'
-          : r?.awb
-            ? 'LUNAS • Menunggu Penjemputan Kurir'
-            : 'LUNAS • Sedang Disiapkan Logistik'
+    const isIssue = isShipFailed || isShipReturn
+    const heroIsTransit = !isDelivered && !isIssue && !isShipHold && (shipNorm === 'dropping_off' || shipNorm === 'in_transit' || shipNorm === 'picked')
+    const topTitle = isShipFailed
+      ? 'Kendala Pengiriman'
+      : isShipReturn
+        ? 'Pengembalian Paket'
+        : isShipHold
+          ? 'Pengiriman Tertunda'
+          : isDelivered
+            ? 'Pesanan Selesai'
+            : heroIsTransit
+              ? 'Lacak Pengiriman'
+              : 'Status Pengiriman'
+    const heroTitle =
+      shipNorm === 'courier_not_found'
+        ? 'Kurir Tidak Ditemukan'
+        : shipNorm === 'cancelled'
+          ? 'Pengiriman Dibatalkan Kurir'
+          : shipNorm === 'rejected'
+            ? 'Paket Ditolak Saat Pengiriman'
+            : shipNorm === 'disposed'
+              ? 'Pengiriman Gagal Diteruskan'
+              : shipNorm === 'returned'
+                ? 'Paket Kembali ke Posko CS'
+                : shipNorm === 'return_in_transit'
+                  ? 'Paket Sedang Dikembalikan'
+                  : isShipHold
+                    ? 'Pengiriman Tertunda Sementara'
+                    : isDelivered
+                      ? 'Paket Telah Diterima'
+                      : shipNorm === 'dropping_off'
+                        ? 'Kurir Menuju Alamat Anda'
+                        : heroIsTransit
+                          ? 'Paket Dalam Perjalanan'
+                          : 'Pembayaran Berhasil'
+    const heroBadge = isShipFailed
+      ? 'KENDALA KURIR • Dijadwalkan Ulang Logistik'
+      : isShipReturn
+        ? 'RETUR KE POSKO • Hubungi Petugas CS'
+        : isShipHold
+          ? 'ON HOLD • Pengiriman Tertunda Sementara'
+          : isDelivered
+            ? 'TERKIRIM • Pesanan Selesai'
+            : shipNorm === 'dropping_off'
+              ? 'DIANTAR KURIR • Siapkan Penerima'
+              : heroIsTransit
+                ? 'DALAM PENGIRIMAN • Pantau Berkala'
+                : r?.awb
+                  ? 'LUNAS • Menunggu Penjemputan Kurir'
+                  : 'LUNAS • Sedang Disiapkan Logistik'
 
     return (
       <Screen
@@ -664,23 +750,37 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
         }
       >
         <div className="relative flex flex-col gap-4 overflow-hidden p-5">
-          {!heroIsTransit && <Confetti />}
+          {!heroIsTransit && !isIssue && !isShipHold && <Confetti />}
           <section
             className={cx(
               'flex flex-col items-center gap-2.5 rounded-[20px] border p-5 text-center',
-              heroIsTransit ? 'border-[#b9deec] bg-tint/70' : 'border-[#c6efd8] bg-mint'
+              isIssue
+                ? 'border-[#f5c2bc] bg-[#fff5f4]'
+                : isShipHold
+                  ? 'border-[#f3d9a4] bg-warn-soft'
+                  : heroIsTransit
+                    ? 'border-[#b9deec] bg-tint/70'
+                    : 'border-[#c6efd8] bg-mint'
             )}
           >
             <span
               className={cx(
                 'lf-pop flex size-14 items-center justify-center rounded-full text-white',
-                heroIsTransit ? 'bg-primary' : 'bg-success'
+                isIssue ? 'bg-danger' : isShipHold ? 'bg-warn' : heroIsTransit ? 'bg-primary' : 'bg-success'
               )}
             >
-              {heroIsTransit ? <Truck className="size-7" aria-hidden /> : <Check className="size-8" strokeWidth={3} aria-hidden />}
+              {isShipReturn ? (
+                <RotateCcw className="size-7" aria-hidden />
+              ) : isShipFailed || isShipHold ? (
+                <AlertCircle className="size-7" aria-hidden />
+              ) : heroIsTransit ? (
+                <Truck className="size-7" aria-hidden />
+              ) : (
+                <Check className="size-8" strokeWidth={3} aria-hidden />
+              )}
             </span>
             <p className="text-base font-extrabold text-ink">{heroTitle}</p>
-            <Badge tone={heroIsTransit ? 'info' : 'success'} className="bg-white">
+            <Badge tone={isIssue ? 'danger' : isShipHold ? 'warn' : heroIsTransit ? 'info' : 'success'} className="bg-white">
               {heroBadge}
             </Badge>
             <p className="text-[22px] font-bold tabular-nums text-ink">{rupiah(displayedAmount)}</p>
@@ -688,6 +788,15 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
               Dibayar via {paymentMethodLabel}
               {orderId ? ` • ${orderId}` : ''}
             </p>
+            {(isIssue || isShipHold) && (
+              <p className="max-w-xs text-xs leading-5 text-ink/85">
+                {isShipFailed
+                  ? 'Tenang, ongkir Anda aman. Petugas logistik kami telah menerima kendala ini dan akan menjadwalkan ulang penjemputan kurir tanpa biaya tambahan.'
+                  : isShipReturn
+                    ? 'Paket dikembalikan ke Posko CS demi keamanan barang Anda. Petugas akan membantu penjadwalan ulang atau pengambilan di stasiun.'
+                    : 'Kurir sedang menjadwalkan ulang pengantaran paket Anda. Pantau pembaruan status secara berkala.'}
+              </p>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -706,7 +815,7 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                     ['Nomor Resi (AWB)', realAwb],
                     ['Total Pembayaran', rupiah(displayedAmount)],
                     ['Metode Bayar', paymentMethodLabel],
-                    ['Status Pengiriman', isDelivered ? 'Paket Telah Diterima' : heroIsTransit ? 'Dalam Perjalanan' : 'Disiapkan Logistik'],
+                    ['Status Pengiriman', heroTitle],
                   ],
                   footerNote: 'Bukti pembayaran sah layanan pengiriman barang temuan LoFound KAI Commuter.',
                 })
@@ -789,25 +898,46 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
               {['Dikemas', 'Dijemput', 'Dikirim', 'Tiba'].map((label, idx) => {
                 const isDone = idx < milestoneDoneCount
                 const isCurr = idx === milestoneActiveIdx
+                const isErrorNode = isIssue && idx === 0
+                const isHoldNode = isShipHold && idx === 0
                 return (
                   <div key={label} className="relative z-10 flex flex-col items-center gap-1.5 text-center">
                     <span
                       className={cx(
                         'flex size-6 items-center justify-center rounded-full border-2',
-                        isDone
-                          ? 'border-success bg-success text-white'
-                          : isCurr
-                            ? 'border-primary bg-white ring-4 ring-tint'
-                            : 'border-[#c4d3db] bg-white'
+                        isErrorNode
+                          ? 'border-danger bg-danger text-white ring-4 ring-[#fde2e0]'
+                          : isHoldNode
+                            ? 'border-warn bg-warn text-white ring-4 ring-warn-soft'
+                            : isDone
+                              ? 'border-success bg-success text-white'
+                              : isCurr
+                                ? 'border-primary bg-white ring-4 ring-tint'
+                                : 'border-[#c4d3db] bg-white'
                       )}
                     >
-                      {isDone ? (
+                      {isErrorNode ? (
+                        <X className="size-3.5" strokeWidth={3} aria-hidden />
+                      ) : isHoldNode ? (
+                        <Clock className="size-3" strokeWidth={2.5} aria-hidden />
+                      ) : isDone ? (
                         <Check className="size-3.5" strokeWidth={3} aria-hidden />
                       ) : isCurr ? (
                         <span className="size-2 rounded-full bg-primary" />
                       ) : null}
                     </span>
-                    <span className={cx('text-[11px]', isDone || isCurr ? 'font-bold text-ink' : 'font-medium text-muted')}>
+                    <span
+                      className={cx(
+                        'text-[11px]',
+                        isErrorNode
+                          ? 'font-bold text-danger'
+                          : isHoldNode
+                            ? 'font-bold text-warn'
+                            : isDone || isCurr
+                              ? 'font-bold text-ink'
+                              : 'font-medium text-muted'
+                      )}
+                    >
                       {label}
                     </span>
                   </div>
@@ -824,18 +954,38 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                   {[...r.trackingHistory].reverse().map((h, idx) => {
                     const isLatest = idx === 0
                     const ev = formatTrackingEvent(h)
+                    const dotClass =
+                      ev.tone === 'danger'
+                        ? isLatest
+                          ? 'bg-danger ring-4 ring-[#fde2e0]'
+                          : 'bg-danger/70'
+                        : ev.tone === 'warn'
+                          ? isLatest
+                            ? 'bg-warn ring-4 ring-warn-soft'
+                            : 'bg-warn/70'
+                          : ev.tone === 'success'
+                            ? isLatest
+                              ? 'bg-success ring-4 ring-mint'
+                              : 'bg-success/80'
+                            : isLatest
+                              ? 'bg-primary ring-4 ring-tint'
+                              : 'bg-[#cbd7df]'
+                    const titleClass =
+                      ev.tone === 'danger'
+                        ? 'text-danger'
+                        : ev.tone === 'warn'
+                          ? 'text-warn'
+                          : ev.tone === 'success'
+                            ? isLatest
+                              ? 'text-success'
+                              : 'text-ink'
+                            : isLatest
+                              ? 'text-primary-dark'
+                              : 'text-ink'
                     return (
                       <li key={idx} className="relative flex flex-col gap-0.5">
-                        <span
-                          aria-hidden
-                          className={cx(
-                            'absolute -left-5 top-1 size-3.5 rounded-full border-2 border-white',
-                            isLatest ? 'bg-success ring-4 ring-mint' : 'bg-[#cbd7df]'
-                          )}
-                        />
-                        <p className={cx('text-xs font-bold leading-4', isLatest ? 'text-success' : 'text-ink')}>
-                          {ev.title}
-                        </p>
+                        <span aria-hidden className={cx('absolute -left-5 top-1 size-3.5 rounded-full border-2 border-white', dotClass)} />
+                        <p className={cx('text-xs font-bold leading-4', titleClass)}>{ev.title}</p>
                         {ev.desc && <p className="text-[11px] leading-4 text-muted">{ev.desc}</p>}
                         {h.updated_at && (
                           <p className="text-[11px] tabular-nums text-soft">

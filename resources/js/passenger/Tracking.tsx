@@ -161,16 +161,36 @@ export function TrackingScreen({ id }: { id: string }) {
                     {active && i === 4 && s === 'bast' && !choseStationPickup && <Badge tone="coral">Pilih Metode</Badge>}
                     {active && i === 4 && s === 'bast' && choseStationPickup && <Badge tone="success">Siap Diambil</Badge>}
                     {active && i === 4 && s === 'dikirim' && (
-                      <Badge tone="info">
-                        {r.shippingStatus === 'dropping_off'
-                          ? 'Diantar ke Alamat'
-                          : r.shippingStatus === 'in_transit'
-                            ? 'Dalam Perjalanan'
-                            : r.shippingStatus === 'picked'
-                              ? 'Dijemput Kurir'
-                              : r.awb
-                                ? 'Menunggu Kurir'
-                                : 'Diproses Logistik'}
+                      <Badge
+                        tone={
+                          ['courier_not_found', 'cancelled', 'rejected', 'disposed', 'return_in_transit', 'returned'].includes((r.shippingStatus || '').toLowerCase())
+                            ? 'danger'
+                            : r.shippingStatus === 'on_hold'
+                              ? 'warn'
+                              : 'info'
+                        }
+                      >
+                        {r.shippingStatus === 'courier_not_found'
+                          ? 'Kurir Tidak Ditemukan'
+                          : r.shippingStatus === 'cancelled'
+                            ? 'Dibatalkan Kurir'
+                            : r.shippingStatus === 'rejected'
+                              ? 'Paket Ditolak'
+                              : r.shippingStatus === 'disposed'
+                                ? 'Gagal Terkirim'
+                                : r.shippingStatus === 'return_in_transit' || r.shippingStatus === 'returned'
+                                  ? 'Retur ke Posko'
+                                  : r.shippingStatus === 'on_hold'
+                                    ? 'Tertunda Sementara'
+                                    : r.shippingStatus === 'dropping_off'
+                                      ? 'Diantar ke Alamat'
+                                      : r.shippingStatus === 'in_transit'
+                                        ? 'Dalam Perjalanan'
+                                        : r.shippingStatus === 'picked'
+                                          ? 'Dijemput Kurir'
+                                          : r.awb
+                                            ? 'Menunggu Kurir'
+                                            : 'Diproses Logistik'}
                       </Badge>
                     )}
                   </div>
@@ -296,16 +316,36 @@ export function TrackingScreen({ id }: { id: string }) {
       }
     }
     if (step === 4) {
-      if (s === 'dikirim')
+      if (s === 'dikirim') {
+        const st = (r.shippingStatus || '').toLowerCase()
+        const isIssue = ['courier_not_found', 'cancelled', 'rejected', 'disposed', 'return_in_transit', 'returned'].includes(st)
+        const isHold = st === 'on_hold'
+        const msg =
+          st === 'courier_not_found'
+            ? 'Kendala kurir: Tidak ada kurir tersedia saat penjemputan. Petugas logistik akan menjadwalkan ulang.'
+            : st === 'cancelled' || st === 'rejected' || st === 'disposed'
+              ? `Pengiriman terkendala (${st}). Hubungi atau tunggu penjadwalan ulang dari petugas logistik.`
+              : st === 'return_in_transit' || st === 'returned'
+                ? 'Paket dikembalikan ke Posko CS karena pengantaran gagal.'
+                : isHold
+                  ? 'Pengiriman tertunda sementara oleh pihak kurir.'
+                  : r.awb
+                    ? `Barang sedang dalam pengiriman via ekspedisi (Nomor Resi: ${r.awb}).`
+                    : 'Metode pengiriman ekspedisi telah diproses & lunas. Paket sedang disiapkan oleh Petugas Logistik KAI.'
         return (
           <div className="mt-3 flex flex-col gap-3">
-            <div className="flex items-start gap-2.5 rounded-2xl bg-mint p-3 text-[13px] leading-5 text-ink">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-              <span className="min-w-0 flex-1 break-words">
-                {r.awb
-                  ? `Barang sedang dalam perjalanan via ekspedisi (Nomor Resi: ${r.awb}).`
-                  : 'Metode pengiriman ekspedisi telah diproses & lunas. Paket sedang disiapkan oleh Petugas Logistik KAI.'}
-              </span>
+            <div
+              className={cx(
+                'flex items-start gap-2.5 rounded-2xl p-3 text-[13px] leading-5 text-ink',
+                isIssue ? 'bg-danger-soft' : isHold ? 'bg-warn-soft' : 'bg-mint'
+              )}
+            >
+              {isIssue || isHold ? (
+                <AlertCircle className={cx('mt-0.5 size-4 shrink-0', isIssue ? 'text-danger' : 'text-warn')} aria-hidden />
+              ) : (
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+              )}
+              <span className="min-w-0 flex-1 break-words">{msg}</span>
             </div>
             <Button variant="cta" full icon={Ticket} onClick={() => go('shipping', { id })}>
               Lihat Status Paket & Resi
@@ -315,6 +355,7 @@ export function TrackingScreen({ id }: { id: string }) {
             </button>
           </div>
         )
+      }
       if (choseStationPickup)
         return (
           <div className="mt-3 flex flex-col gap-3">

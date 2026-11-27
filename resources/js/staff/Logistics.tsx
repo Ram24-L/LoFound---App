@@ -128,6 +128,7 @@ export function ShippingQueuePage() {
             { v: 'Menunggu Resi', l: `Menunggu Resi (${count('Menunggu Resi')})` },
             { v: 'Dikemas', l: `Dikemas (${count('Dikemas')})` },
             { v: 'Dikirim', l: `Dikirim (${count('Dikirim')})` },
+            { v: 'Bermasalah', l: `Kendala (${count('Bermasalah')})` },
             { v: 'Selesai', l: `Tiba di Tujuan (${count('Selesai')})` },
           ]}
         />
@@ -156,8 +157,32 @@ export function ShippingQueuePage() {
                     <td className={td}>{r.dest}</td>
                     <td className={td + ' whitespace-nowrap text-muted'}>{r.paid}</td>
                     <td className={td + ' whitespace-nowrap'}>
-                      <Badge tone={r.status === 'Menunggu Resi' ? 'warn' : r.status === 'Dikemas' ? 'info' : 'success'}>
-                        {r.status === 'Selesai' ? 'Tiba di Tujuan' : r.status}
+                      <Badge
+                        tone={
+                          r.status === 'Bermasalah'
+                            ? 'danger'
+                            : r.status === 'Menunggu Resi'
+                              ? 'warn'
+                              : r.status === 'Dikemas'
+                                ? 'info'
+                                : 'success'
+                        }
+                      >
+                        {r.status === 'Selesai'
+                          ? 'Tiba di Tujuan'
+                          : r.status === 'Bermasalah'
+                            ? r.shipping_status === 'courier_not_found'
+                              ? 'Kurir Tidak Ditemukan'
+                              : r.shipping_status === 'cancelled'
+                                ? 'Dibatalkan Kurir'
+                                : r.shipping_status === 'rejected'
+                                  ? 'Paket Ditolak'
+                                  : r.shipping_status === 'disposed'
+                                    ? 'Gagal Terkirim'
+                                    : r.shipping_status === 'return_in_transit' || r.shipping_status === 'returned'
+                                      ? 'Retur ke Posko'
+                                      : 'Kendala Kurir'
+                            : r.status}
                       </Badge>
                       {r.awb && <span className="ml-2 font-mono text-xs text-muted">{r.awb}</span>}
                     </td>
@@ -166,6 +191,17 @@ export function ShippingQueuePage() {
                         <Button size="sm" onClick={() => setOpen(r)}>
                           Buat Resi
                         </Button>
+                      ) : r.status === 'Bermasalah' ? (
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="cta" onClick={() => setOpen(r)}>
+                            Buat Ulang Resi
+                          </Button>
+                          {(r.biteship_order_id || r.biteship_tracking_id) && (
+                            <Button size="sm" variant="outline" onClick={() => handleSyncTracking(r)}>
+                              Sync Kurir
+                            </Button>
+                          )}
+                        </div>
                       ) : r.status === 'Dikemas' ? (
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="primary" onClick={() => handleMarkShipped(r)}>

@@ -351,4 +351,84 @@ class BiteshipShippingTest extends TestCase
         $this->assertSame('selesai', $laporan->fresh()->status);
         $this->assertSame('Selesai', $temuan->fresh()->status_simpan);
     }
+
+    public function test_biteship_failure_hold_and_return_statuses_are_handled_without_marking_completed(): void
+    {
+        config()->set('services.biteship.api_key', 'biteship_test.TestKey123');
+        config()->set('services.shipping.webhook_secret', null);
+
+        [, $logistik, $laporan, $klaim, $temuan] = $this->seedApprovedScenario();
+
+        $bast = BastPengambilan::create([
+            'kode'                    => 'BAST-2026-953',
+            'klaim_id'                => $klaim->id,
+            'metode_ambil'            => 'ekspedisi',
+            'alamat_kirim'            => 'Jl. Merdeka No. 85, Bogor, 16610',
+            'destination_postal_code' => '16610',
+            'kurir'                   => 'JNE Reguler',
+            'courier_company'         => 'jne',
+            'courier_type'            => 'reg',
+            'ongkir'                  => 21500,
+            'status_bayar'            => 'dikemas',
+            'nomor_resi'              => 'WYB-1795747045101',
+            'biteship_order_id'       => 'bshp-order-953',
+            'biteship_tracking_id'    => 'bshp-track-953',
+        ]);
+
+        // 1. courier_not_found -> gagal_kirim & Bermasalah in logistics inventory, NOT selesai
+        $this->postJson('/api/webhooks/shipping', [
+            'event'    => 'order.status',
+            'order_id' => 'bshp-order-953',
+            'status'   => 'courierNotFound',
+        ])->assertOk();
+
+        $this->assertSame('courier_not_found', $bast->fresh()->shipping_status);
+        $this->assertSame('gagal_kirim', $bast->fresh()->status_bayar);
+        $this->assertNotSame('selesai', $laporan->fresh()->status);
+
+        $invRes = $this->actingAs($logistik)->getJson('/api/staff/logistics/inventory')->assertOk();
+        $row = collect($invRes->json('shipments'))->firstWhere('bast_code', 'BAST-2026-953');
+        $this->assertSame('Bermasalah', $row['status'] ?? null);
+
+        // 2. on_hold -> keeps non-completed status & marks shipping_status = on_hold
+        $this->postJson('/api/webhooks/shipping', [
+            'event'    => 'order.status',
+            'order_id' => 'bshp-order-953',
+            'status'   => 'onHold',
+        ])->assertOk();
+        $this->assertSame('on_hold', $bast->fresh()->shipping_status);
+        $this->assertNotSame('selesai', $laporan->fresh()->status);
+
+        // 3. returned -> status_bayar = retur & restores BarangTemuan to Tersimpan
+        $this->postJson('/api/webhooks/shipping', [
+            'event'    => 'order.status',
+            'order_id' => 'bshp-order-953',
+            'status'   => 'returned',
+        ])->assertOk();
+        $this->assertSame('returned', $bast->fresh()->shipping_status);
+        $this->assertSame('retur', $bast->fresh()->status_bayar);
+        $this->assertSame('Tersimpan', $temuan->fresh()->status_simpan);
+        $this->assertNotSame('selesai', $laporan->fresh()->status);
+
+        // 4. Staff can re-order via Biteship after courier_not_found
+        Http::fake([
+            'https://api.biteship.com/v1/orders' => Http::response([
+                'success' => true,
+                'id'      => 'bshp-order-953-retry',
+                'status'  => 'confirmed',
+                'courier' => [
+                    'tracking_id' => 'bshp-track-953-retry',
+                    'waybill_id'  => 'WYB-RETRY-953',
+                ],
+            ], 200),
+        ]);
+
+        $retryRes = $this->actingAs($logistik)->postJson("/api/staff/logistics/shipments/{$bast->id}/ship", [
+            'awb'    => '',
+            'action' => 'pack',
+        ]);
+        $retryRes->assertOk()->assertJsonPath('status', 'Dikemas')->assertJsonPath('awb', 'WYB-RETRY-953');
+        $this->assertSame('confirmed', $bast->fresh()->shipping_status);
+        $this->assertSame('dikemas', $bast->fresh()->status_bayar);
+    }
 }

@@ -418,16 +418,118 @@ class BiteshipService
             return $normStatus;
         }
 
-        if (in_array($normStatus, ['cancelled', 'rejected', 'disposed'], true)) {
+        if (in_array($normStatus, ['courier_not_found', 'cancelled', 'rejected', 'disposed'], true)) {
+            $updateBast['status_bayar'] = 'gagal_kirim';
             $bast->update($updateBast);
-            if ($laporan) {
-                RiwayatLaporan::create([
-                    'laporan_id' => $laporan->id,
-                    'waktu'      => now()->format('H:i'),
-                    'keterangan' => "Status pengiriman diperbarui kurir: {$normStatus}" . ($awb ? " ({$awb})" : '') . '.',
-                ]);
+
+            if ($laporan && $laporan->status !== 'selesai') {
+                if ($laporan->status === 'bast') {
+                    $laporan->update(['status' => 'dikirim']);
+                }
+
+                $descMap = [
+                    'courier_not_found' => 'Kurir tidak ditemukan untuk penjemputan. Petugas logistik akan menjadwalkan ulang penjemputan.',
+                    'cancelled'         => 'Order pengiriman dibatalkan oleh pihak ekspedisi.',
+                    'rejected'          => 'Paket ditolak saat proses pengiriman oleh penerima/kurir.',
+                    'disposed'          => 'Paket gagal dikirim dan dinyatakan tidak dapat diteruskan oleh kurir.',
+                ];
+                $titleMap = [
+                    'courier_not_found' => 'Kurir Penjemput Tidak Ditemukan',
+                    'cancelled'         => 'Pengiriman Dibatalkan Kurir',
+                    'rejected'          => 'Paket Ditolak Saat Pengiriman',
+                    'disposed'          => 'Kendala Pengiriman Ekspedisi',
+                ];
+                $desc = $descMap[$normStatus] ?? "Kendala pengiriman ({$normStatus}).";
+
+                $alreadyLogged = RiwayatLaporan::where('laporan_id', $laporan->id)
+                    ->where('keterangan', 'like', "%{$desc}%")
+                    ->exists();
+                if (! $alreadyLogged) {
+                    RiwayatLaporan::create([
+                        'laporan_id' => $laporan->id,
+                        'waktu'      => now()->format('H:i'),
+                        'keterangan' => $desc . ($awb ? " ({$awb})" : ''),
+                    ]);
+                    NotificationService::notifyReport(
+                        $laporan,
+                        $titleMap[$normStatus] ?? 'Kendala Pengiriman Paket',
+                        $desc,
+                        ['details' => ['Kode BAST' => $bast->kode, 'Nomor Resi' => $awb ?: '-', 'Status' => $normStatus]]
+                    );
+                }
             }
-            AuditLog::record(null, $source, "Pengiriman {$normStatus}", "{$bast->kode}" . ($awb ? " • {$awb}" : ''));
+            AuditLog::record(null, $source, "Kendala pengiriman: {$normStatus}", "{$bast->kode}" . ($awb ? " • {$awb}" : ''));
+
+            return $normStatus;
+        }
+
+        if (in_array($normStatus, ['return_in_transit', 'returned'], true)) {
+            $updateBast['status_bayar'] = 'retur';
+            $bast->update($updateBast);
+
+            if ($normStatus === 'returned' && $bast->klaim?->barangTemuan) {
+                $bast->klaim->barangTemuan->update(['status_simpan' => 'Tersimpan']);
+            }
+
+            if ($laporan && $laporan->status !== 'selesai') {
+                if ($laporan->status === 'bast') {
+                    $laporan->update(['status' => 'dikirim']);
+                }
+                $desc = $normStatus === 'returned'
+                    ? 'Paket gagal terkirim dan telah dikembalikan dengan aman ke Posko CS.'
+                    : 'Paket gagal terkirim dan sedang dalam perjalanan kembali ke Posko CS.';
+                $title = $normStatus === 'returned'
+                    ? 'Paket Kembali ke Posko CS'
+                    : 'Paket Sedang Dikembalikan ke Posko';
+
+                $alreadyLogged = RiwayatLaporan::where('laporan_id', $laporan->id)
+                    ->where('keterangan', 'like', "%{$desc}%")
+                    ->exists();
+                if (! $alreadyLogged) {
+                    RiwayatLaporan::create([
+                        'laporan_id' => $laporan->id,
+                        'waktu'      => now()->format('H:i'),
+                        'keterangan' => $desc . ($awb ? " ({$awb})" : ''),
+                    ]);
+                    NotificationService::notifyReport(
+                        $laporan,
+                        $title,
+                        $desc,
+                        ['details' => ['Kode BAST' => $bast->kode, 'Nomor Resi' => $awb ?: '-', 'Status' => $normStatus]]
+                    );
+                }
+            }
+            AuditLog::record(null, $source, "Retur pengiriman: {$normStatus}", "{$bast->kode}" . ($awb ? " • {$awb}" : ''));
+
+            return $normStatus;
+        }
+
+        if ($normStatus === 'on_hold') {
+            if (! in_array($bast->status_bayar, ['dikirim', 'selesai'], true)) {
+                $updateBast['status_bayar'] = 'dikemas';
+            }
+            $bast->update($updateBast);
+
+            if ($laporan && $laporan->status !== 'selesai') {
+                $desc = 'Pengiriman tertunda sementara oleh pihak kurir dan akan dijadwalkan ulang.';
+                $alreadyLogged = RiwayatLaporan::where('laporan_id', $laporan->id)
+                    ->where('keterangan', 'like', '%tertunda sementara%')
+                    ->exists();
+                if (! $alreadyLogged) {
+                    RiwayatLaporan::create([
+                        'laporan_id' => $laporan->id,
+                        'waktu'      => now()->format('H:i'),
+                        'keterangan' => $desc . ($awb ? " ({$awb})" : ''),
+                    ]);
+                    NotificationService::notifyReport(
+                        $laporan,
+                        'Pengiriman Tertunda Sementara',
+                        $desc,
+                        ['details' => ['Kode BAST' => $bast->kode, 'Nomor Resi' => $awb ?: '-']]
+                    );
+                }
+            }
+            AuditLog::record(null, $source, 'Pengiriman tertunda (on_hold)', "{$bast->kode}" . ($awb ? " • {$awb}" : ''));
 
             return $normStatus;
         }

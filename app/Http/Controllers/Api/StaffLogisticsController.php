@@ -31,12 +31,15 @@ class StaffLogisticsController extends Controller
                 $barang = $bast->klaim?->barangTemuan;
 
                 // Status mapping:
-                // If nomor_resi exists and report is 'dikirim' -> 'Dikirim'
-                // If nomor_resi exists but report is 'bast' -> 'Dikemas'
-                // Otherwise -> 'Menunggu Resi'
+                // Failed/returned shipping statuses -> 'Bermasalah'
+                // Delivered -> 'Selesai'
+                // Has AWB & status_bayar === 'dikemas' -> 'Dikemas', else 'Dikirim'
+                $problemStatuses = ['courier_not_found', 'cancelled', 'rejected', 'disposed', 'return_in_transit', 'returned'];
                 $status = 'Menunggu Resi';
                 if ($bast->waktu_serah_terima || ($laporan && $laporan->status === 'selesai')) {
                     $status = 'Selesai';
+                } elseif (in_array($bast->shipping_status, $problemStatuses, true) || in_array($bast->status_bayar, ['gagal_kirim', 'retur'], true)) {
+                    $status = 'Bermasalah';
                 } elseif ($bast->nomor_resi) {
                     $status = ($bast->status_bayar === 'dikemas') ? 'Dikemas' : 'Dikirim';
                 }
@@ -136,6 +139,11 @@ class StaffLogisticsController extends Controller
             $bast->biteship_order_id = $order['order_id'] ?: null;
             $bast->biteship_tracking_id = $order['tracking_id'] ?: null;
             $bast->shipping_status = $order['status'] ?: 'confirmed';
+            $bast->tracking_history = [[
+                'status'     => $bast->shipping_status,
+                'note'       => 'Order pengiriman baru dikonfirmasi',
+                'updated_at' => now()->toIso8601String(),
+            ]];
 
             $cleanOrderSuffix = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $order['order_id']) ?: Str::random(8));
             $awb = strtoupper((string) ($order['waybill_id'] ?: ('BSHP-' . substr($cleanOrderSuffix, -8))));

@@ -268,7 +268,7 @@ export type Shipment = {
   courier: string
   dest: string
   paid: string
-  status: 'Menunggu Resi' | 'Dikemas' | 'Dikirim' | 'Selesai'
+  status: 'Menunggu Resi' | 'Dikemas' | 'Dikirim' | 'Selesai' | 'Bermasalah'
   awb?: string
   biteship_order_id?: string | null
   biteship_tracking_id?: string | null
