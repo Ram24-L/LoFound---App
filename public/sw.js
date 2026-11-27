@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lofound-pwa-v1';
+const CACHE_NAME = 'lofound-pwa-v2';
 const PRECACHE_URLS = [
   '/manifest.webmanifest',
   '/icons/icon-192.png',

@@ -1,24 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <clipPath id="bg-clip">
-      <rect width="512" height="512" rx="112" />
-    </clipPath>
-  </defs>
-  <g clip-path="url(#bg-clip)">
-    <rect width="512" height="512" fill="#318FB5" />
-    <circle cx="430" cy="70" r="170" fill="#5EB5D7" fill-opacity="0.32" />
-    <circle cx="96" cy="442" r="130" fill="#236F8E" fill-opacity="0.28" />
-    <!-- White card emblem -->
-    <rect x="116" y="128" width="248" height="256" rx="48" fill="#FFFFFF" />
-    <!-- Train/luggage window & stripe inside emblem -->
-    <rect x="152" y="168" width="176" height="92" rx="22" fill="#318FB5" />
-    <rect x="174" y="190" width="54" height="48" rx="10" fill="#D5ECF5" />
-    <rect x="252" y="190" width="54" height="48" rx="10" fill="#D5ECF5" />
-    <rect x="152" y="282" width="176" height="22" rx="11" fill="#F47C6D" />
-    <circle cx="182" cy="342" r="16" fill="#18364A" />
-    <circle cx="298" cy="342" r="16" fill="#18364A" />
-    <!-- Finder badge accent -->
-    <circle cx="372" cy="148" r="46" fill="#F47C6D" stroke="#FFFFFF" stroke-width="14" />
-    <circle cx="372" cy="148" r="14" fill="#FFFFFF" />
-  </g>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="512" height="512" fill="white"/>
+<path d="M126.381 140.8H212.126L158.535 299.536H229.989L212.126 344.889H83.5081L126.381 140.8Z" fill="#318FB5"/>
+<path d="M250.9 140.8H322.645C369.279 140.8 415.914 166.4 444.612 203.378H297.535L250.9 140.8Z" fill="#318FB5"/>
+<path d="M262.039 192H322.76L310.258 231.638H404.911L388.838 274.107H294.185L269.183 344.889H208.462L262.039 192Z" fill="#49B8E5"/>
+<path d="M444.269 270.222C456.177 270.222 465.831 262.581 465.831 253.156C465.831 243.73 456.177 236.089 444.269 236.089C432.361 236.089 422.708 243.73 422.708 253.156C422.708 262.581 432.361 270.222 444.269 270.222Z" fill="#E5604F"/>
 </svg>

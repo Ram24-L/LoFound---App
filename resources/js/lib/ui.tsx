@@ -666,9 +666,29 @@ export function TrainArt({ className, tone = 'light' }: { className?: string; to
   )
 }
 
+export function LogoMark({ className = 'size-7' }: { className?: string }) {
+  return (
+    <svg viewBox="64 116 420 256" fill="none" className={className} aria-hidden>
+      <path d="M126.381 140.8H212.126L158.535 299.536H229.989L212.126 344.889H83.5081L126.381 140.8Z" fill="#318FB5" />
+      <path d="M250.9 140.8H322.645C369.279 140.8 415.914 166.4 444.612 203.378H297.535L250.9 140.8Z" fill="#318FB5" />
+      <path d="M262.039 192H322.76L310.258 231.638H404.911L388.838 274.107H294.185L269.183 344.889H208.462L262.039 192Z" fill="#49B8E5" />
+      <path d="M444.269 270.222C456.177 270.222 465.831 262.581 465.831 253.156C465.831 243.73 456.177 236.089 444.269 236.089C432.361 236.089 422.708 243.73 422.708 253.156C422.708 262.581 432.361 270.222 444.269 270.222Z" fill="#E5604F" />
+    </svg>
+  )
+}
+
 export function Logo({ light, size = 'md' }: { light?: boolean; size?: 'sm' | 'md' }) {
   return (
-    <span className="inline-flex items-center">
+    <span className="inline-flex items-center gap-2">
+      <span
+        className={cx(
+          'flex shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-sm',
+          size === 'sm' ? 'size-7' : 'size-8',
+          !light && 'ring-1 ring-line',
+        )}
+      >
+        <LogoMark className="h-full w-full" />
+      </span>
       <span className={cx('font-extrabold tracking-tight', size === 'sm' ? 'text-base' : 'text-lg', light ? 'text-white' : 'text-ink')}>
         Lo<span className={light ? 'text-[#cfeaf5]' : 'text-primary'}>Found</span>
       </span>
