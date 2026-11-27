@@ -181,13 +181,6 @@ export function ProfileScreen() {
     }
   }, [section, user])
 
-  const initials = (user?.full || user?.name || 'U')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join('')
-
   const handleSaveAddress = async () => {
     if (!addrForm.addr.trim() || !addrForm.city.trim()) {
       toast('Alamat lengkap dan kota wajib diisi.', { tone: 'info' })
@@ -246,7 +239,9 @@ export function ProfileScreen() {
       <header className="bg-primary px-5 pb-6 pt-5 text-white">
         <h1 className="text-[22px] font-bold">Profil</h1>
         <div className="mt-4 flex items-center gap-3">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-primary">{initials}</span>
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-primary">
+            <User className="size-7" aria-hidden />
+          </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold">{user?.full}</p>
             <p className="truncate text-xs text-white/80">{user?.contact}</p>

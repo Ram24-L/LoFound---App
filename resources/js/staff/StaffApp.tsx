@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, ChevronRight, ClipboardCheck, Database, Eye, EyeOff, FileClock, LayoutDashboard, LogOut, Package, QrCode, Search, ShieldAlert, Timer, Truck } from 'lucide-react'
+import { Bell, ChevronRight, ClipboardCheck, Database, Eye, EyeOff, FileClock, LayoutDashboard, LogOut, Package, QrCode, Search, ShieldAlert, Timer, Truck, User } from 'lucide-react'
 import { CLAIMS, INVENTORY } from '../lib/data'
 import { Banner, Button, cx, Dialog, Field, IconButton, inputCls, Logo, TrainArt } from '../lib/ui'
 import { ROLE_META, StaffCtx, type Page, type Role } from './common'
@@ -126,7 +126,6 @@ export function StaffApp() {
 
   const meta = ROLE_META[role]
   const displayName = staffUser ? staffUser.name : meta.name
-  const displayInitials = staffUser ? staffUser.initials : meta.initials
   const displayStation = staffUser ? `${meta.label} • ${staffUser.station}` : meta.short
   const menuParent = page === 'item' ? 'inventory' : page
 
@@ -207,8 +206,8 @@ export function StaffApp() {
             </div>
             <IconButton icon={Bell} label="Notifikasi" dot className="text-ink hover:bg-tint [&>span]:border-white" />
             <div className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-                {displayInitials}
+              <span className="flex size-9 items-center justify-center rounded-full bg-primary text-white">
+                <User className="size-5" aria-hidden />
               </span>
               <div className="leading-tight">
                 <p className="text-sm font-bold text-ink">{displayName}</p>

@@ -24,6 +24,11 @@
           $rows[(string) $label] = (string) $value;
       }
   }
+
+  $logoPath = public_path('icons/icon-192.png');
+  $logoSrc = isset($message) && file_exists($logoPath)
+      ? $message->embed($logoPath)
+      : rtrim((string) config('app.url'), '/') . '/icons/icon-192.png?v=2';
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -45,8 +50,8 @@
                   <td align="left" valign="middle">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="background-color:#318fb5;color:#ffffff;font-weight:800;font-size:14px;line-height:14px;padding:8px 10px;border-radius:8px;letter-spacing:-0.3px;">
-                          LF
+                        <td style="background-color:#ffffff;border:1px solid #d5e8f0;border-radius:8px;padding:3px;">
+                          <img src="{{ $logoSrc }}" alt="LoFound" width="32" height="32" style="display:block;border:0;outline:none;border-radius:6px;">
                         </td>
                         <td style="padding-left:10px;">
                           <div style="font-size:16px;font-weight:800;color:#18364a;line-height:1.2;">LoFound</div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, X } from 'lucide-react'
+import { ArrowRight, ArrowUpDown, Bell, Check, ChevronRight, Download, FileClock, Search, Share, ShieldCheck, Trash2, User, X } from 'lucide-react'
 import { FEED, STATUS_META, STATIONS } from '../lib/data'
 import { Badge, Button, CategoryBadge, cx, EmptyState, ErrorState, inputCls, Logo, Pill, ProgressRing, RouteConnector, Sheet, Skeleton, useCategories, useCountUp, useToast } from '../lib/ui'
 import { homeApi } from '../lib/api'
@@ -61,8 +61,8 @@ export function HomeScreen() {
                   {unread > 0 && <span className="absolute right-2.5 top-2.5 size-2.5 rounded-full border-2 border-primary bg-coral" />}
                 </button>
                 <button aria-label="Buka profil" onClick={() => tab('profile')} className="flex size-11 items-center justify-center rounded-full">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-white text-sm font-bold text-primary">
-                    {(user.full || user.name || 'P').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}
+                  <span className="flex size-9 items-center justify-center rounded-full bg-white text-primary">
+                    <User className="size-5" aria-hidden />
                   </span>
                 </button>
               </div>
