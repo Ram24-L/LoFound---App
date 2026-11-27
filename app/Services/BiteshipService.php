@@ -189,7 +189,7 @@ class BiteshipService
             'courier_company'           => $company,
             'courier_type'              => $serviceType,
             'delivery_type'             => 'now',
-            'reference_id'              => $bast->kode,
+            'reference_id'              => $bast->kode . '-' . now()->format('YmdHis') . '-' . substr(bin2hex(random_bytes(2)), 0, 4),
             'items'                     => [
                 [
                     'name'        => substr($itemName, 0, 100),
