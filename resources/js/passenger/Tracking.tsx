@@ -160,7 +160,19 @@ export function TrackingScreen({ id }: { id: string }) {
                     {active && i === 2 && s === 'ditolak' && <Badge tone="danger" icon={XCircle}>Belum Disetujui</Badge>}
                     {active && i === 4 && s === 'bast' && !choseStationPickup && <Badge tone="coral">Pilih Metode</Badge>}
                     {active && i === 4 && s === 'bast' && choseStationPickup && <Badge tone="success">Siap Diambil</Badge>}
-                    {active && i === 4 && s === 'dikirim' && <Badge tone="info">{r.awb ? 'Dalam Pengiriman' : 'Diproses Logistik'}</Badge>}
+                    {active && i === 4 && s === 'dikirim' && (
+                      <Badge tone="info">
+                        {r.shippingStatus === 'dropping_off'
+                          ? 'Diantar ke Alamat'
+                          : r.shippingStatus === 'in_transit'
+                            ? 'Dalam Perjalanan'
+                            : r.shippingStatus === 'picked'
+                              ? 'Dijemput Kurir'
+                              : r.awb
+                                ? 'Menunggu Kurir'
+                                : 'Diproses Logistik'}
+                      </Badge>
+                    )}
                   </div>
                   {active && activePanel(i)}
                 </li>
@@ -169,6 +181,17 @@ export function TrackingScreen({ id }: { id: string }) {
           </ol>
         )}
         {r.items.length > 1 && !refreshing && view !== 'error' && <p className="text-center text-xs text-muted">Menampilkan progres untuk #{r.id}-{item.sub}</p>}
+        {s === 'selesai' && !refreshing && view !== 'error' && (r.awb || r.shippingCourier) && (
+          <div className="rounded-[20px] border border-[#c6efd8] bg-mint p-4">
+            <p className="text-xs font-bold text-success">Paket Ekspedisi Telah Diterima</p>
+            <p className="mt-1 text-xs text-muted">
+              {r.shippingCourier || 'Ekspedisi'} {r.awb ? `• Resi ${r.awb}` : ''}
+            </p>
+            <Button variant="outline" size="sm" full icon={Ticket} className="mt-3 bg-white" onClick={() => go('shipping', { id })}>
+              Lihat Resi & Riwayat Pengiriman
+            </Button>
+          </div>
+        )}
       </div>
     </Screen>
   )

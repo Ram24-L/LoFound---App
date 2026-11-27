@@ -276,6 +276,86 @@ function formatPaymentMethod(paymentType: string | null | undefined): string {
   return map[paymentType.toLowerCase()] || paymentType.replace(/_/g, ' ').toUpperCase()
 }
 
+function cleanCourierName(name: string | null | undefined): string {
+  const raw = (name || '').trim()
+  if (!raw) return 'Ekspedisi'
+  const parts = raw.split(/\s+/)
+  if (parts.length >= 2 && parts[0].toLowerCase() === parts[1].toLowerCase()) {
+    return parts.slice(1).join(' ')
+  }
+  return raw
+}
+
+function normalizeShipStatus(status: string | null | undefined): string {
+  return (status || '')
+    .trim()
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase()
+}
+
+function formatTrackingEvent(entry: { status?: string; note?: string; updated_at?: string }): { title: string; desc: string } {
+  const norm = normalizeShipStatus(entry.status || entry.note)
+  const dict: Record<string, { title: string; desc: string }> = {
+    confirmed: {
+      title: 'Pesanan Pengiriman Dikonfirmasi',
+      desc: 'Nomor resi telah terbit dan paket siap diserahkan ke kurir.',
+    },
+    allocated: {
+      title: 'Kurir Ditugaskan',
+      desc: 'Kurir sedang bersiap menjemput paket di Posko CS.',
+    },
+    picking_up: {
+      title: 'Kurir Menuju Lokasi Penjemputan',
+      desc: 'Kurir dalam perjalanan menjemput paket dari Posko CS.',
+    },
+    picked: {
+      title: 'Paket Telah Dijemput Kurir',
+      desc: 'Paket telah diserahkan ke kurir dan menuju gudang sortir.',
+    },
+    in_transit: {
+      title: 'Paket Dalam Perjalanan',
+      desc: 'Paket sedang dalam perjalanan menuju kota tujuan.',
+    },
+    dropping_off: {
+      title: 'Paket Sedang Diantar ke Alamat',
+      desc: 'Kurir sedang menuju alamat penerima.',
+    },
+    on_hold: {
+      title: 'Pengiriman Tertunda Sementara',
+      desc: 'Kurir mengalami kendala penjemputan/antar dan akan menjadwalkan ulang.',
+    },
+    delivered: {
+      title: 'Paket Telah Diterima',
+      desc: 'Paket telah tiba di alamat tujuan dan diterima.',
+    },
+    cancelled: {
+      title: 'Pengiriman Dibatalkan',
+      desc: 'Order pengiriman dibatalkan oleh pihak ekspedisi.',
+    },
+    rejected: {
+      title: 'Paket Ditolak Penerima',
+      desc: 'Pengiriman gagal diterima dan akan dikembalikan ke posko.',
+    },
+    returned: {
+      title: 'Paket Dikembalikan ke Posko',
+      desc: 'Paket sedang dalam proses pengembalian ke Posko CS.',
+    },
+  }
+
+  const mapped = dict[norm] ?? { title: entry.status || 'Pembaruan Pengiriman', desc: '' }
+  const noteRaw = (entry.note || '').trim()
+  const isRawCode =
+    !noteRaw ||
+    normalizeShipStatus(noteRaw) === norm ||
+    /^(confirmed|allocated|picking_up|picked|in_transit|dropping_off|on_hold|delivered|cancelled|rejected|returned)$/i.test(noteRaw)
+
+  return {
+    title: mapped.title,
+    desc: !isRawCode ? noteRaw : mapped.desc,
+  }
+}
+
 type ShippingFormData = { name: string; wa: string; addr: string; city: string; zip: string }
 type ShippingDraft = { f?: Partial<ShippingFormData>; courier?: string; insure?: boolean }
 
@@ -330,15 +410,28 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
   const shown = useAnimatedNumber(total)
 
   // Real package status from backend (controlled by Petugas Logistik / Biteship Webhook)
-  const realAwb = r?.awb || 'Menunggu input resi petugas logistik'
-  const shipNorm = (r?.shippingStatus || '').toLowerCase()
-  const pkgStep =
-    r?.status === 'selesai' || shipNorm === 'delivered'
+  const courierLabel = cleanCourierName(r?.shippingCourier || courier)
+  const realAwb = r?.awb || 'Menunggu nomor resi kurir'
+  const shipNorm = normalizeShipStatus(r?.shippingStatus)
+  const isDelivered = r?.status === 'selesai' || shipNorm === 'delivered'
+  const isShippingTransit = ['picked', 'dropping_off', 'in_transit', 'on_hold'].includes(shipNorm) || (Boolean(r?.awb) && !['confirmed', 'allocated', 'picking_up'].includes(shipNorm))
+  // 4-stage Shopee-style milestones: 0=Dikemas, 1=Dijemput, 2=Dikirim, 3=Tiba
+  const milestoneDoneCount = isDelivered
+    ? 4
+    : ['in_transit', 'dropping_off', 'on_hold'].includes(shipNorm)
       ? 2
-      : ['picked', 'dropping_off', 'in_transit', 'on_hold'].includes(shipNorm) ||
-          Boolean(r?.awb && !['confirmed', 'allocated', 'picking_up'].includes(shipNorm))
+      : shipNorm === 'picked' || isShippingTransit
         ? 1
         : 0
+  const milestoneActiveIdx = isDelivered
+    ? -1
+    : ['in_transit', 'dropping_off', 'on_hold'].includes(shipNorm)
+      ? 2
+      : shipNorm === 'picked'
+        ? 1
+        : r?.awb
+          ? 0
+          : 0
 
   useEffect(() => {
     if (phase !== 'form') return
@@ -541,10 +634,29 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
 
   const paymentMethodLabel = formatPaymentMethod(paymentType)
 
-  if (phase === 'paid')
+  if (phase === 'paid') {
+    const heroIsTransit = !isDelivered && (shipNorm === 'dropping_off' || shipNorm === 'in_transit' || shipNorm === 'picked' || shipNorm === 'on_hold')
+    const topTitle = isDelivered ? 'Pesanan Selesai' : heroIsTransit ? 'Lacak Pengiriman' : 'Status Pengiriman'
+    const heroTitle = isDelivered
+      ? 'Paket Telah Diterima'
+      : shipNorm === 'dropping_off'
+        ? 'Kurir Menuju Alamat Anda'
+        : heroIsTransit
+          ? 'Paket Dalam Perjalanan'
+          : 'Pembayaran Berhasil'
+    const heroBadge = isDelivered
+      ? 'TERKIRIM • Pesanan Selesai'
+      : shipNorm === 'dropping_off'
+        ? 'DIANTAR KURIR • Siapkan Penerima'
+        : heroIsTransit
+          ? 'DALAM PENGIRIMAN • Pantau Berkala'
+          : r?.awb
+            ? 'LUNAS • Menunggu Penjemputan Kurir'
+            : 'LUNAS • Sedang Disiapkan Logistik'
+
     return (
       <Screen
-        header={<TopBar title="Pembayaran Berhasil" sub={`#${id}`} />}
+        header={<TopBar title={topTitle} sub={`#${id}`} />}
         footer={
           <Button variant="cta" size="lg" full onClick={back}>
             Kembali ke Status Laporan
@@ -552,18 +664,29 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
         }
       >
         <div className="relative flex flex-col gap-4 overflow-hidden p-5">
-          <Confetti />
-          <section className="flex flex-col items-center gap-3 rounded-[20px] border border-[#c6efd8] bg-mint p-5 text-center">
-            <span className="lf-pop flex size-16 items-center justify-center rounded-full bg-success text-white">
-              <Check className="size-9" strokeWidth={3} aria-hidden />
+          {!heroIsTransit && <Confetti />}
+          <section
+            className={cx(
+              'flex flex-col items-center gap-2.5 rounded-[20px] border p-5 text-center',
+              heroIsTransit ? 'border-[#b9deec] bg-tint/70' : 'border-[#c6efd8] bg-mint'
+            )}
+          >
+            <span
+              className={cx(
+                'lf-pop flex size-14 items-center justify-center rounded-full text-white',
+                heroIsTransit ? 'bg-primary' : 'bg-success'
+              )}
+            >
+              {heroIsTransit ? <Truck className="size-7" aria-hidden /> : <Check className="size-8" strokeWidth={3} aria-hidden />}
             </span>
-            <Badge tone="success" className="bg-white">
-              LUNAS • Terkirim ke Antrian Logistik
+            <p className="text-base font-extrabold text-ink">{heroTitle}</p>
+            <Badge tone={heroIsTransit ? 'info' : 'success'} className="bg-white">
+              {heroBadge}
             </Badge>
-            <p className="text-[22px] font-bold text-ink">{rupiah(displayedAmount)}</p>
+            <p className="text-[22px] font-bold tabular-nums text-ink">{rupiah(displayedAmount)}</p>
             <p className="text-xs text-muted">
               Dibayar via {paymentMethodLabel}
-              {orderId ? ` • ${orderId}` : ''} • {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+              {orderId ? ` • ${orderId}` : ''}
             </p>
             <Button
               variant="outline"
@@ -579,11 +702,11 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                     ['Nomor Laporan', `#${id}`],
                     ['Kode Transaksi', orderId || r?.bastCode || '-'],
                     ['Barang', r?.items?.[0]?.name || 'Barang Temuan'],
-                    ['Jasa Kurir', courier],
+                    ['Jasa Kurir', courierLabel],
                     ['Nomor Resi (AWB)', realAwb],
                     ['Total Pembayaran', rupiah(displayedAmount)],
                     ['Metode Bayar', paymentMethodLabel],
-                    ['Status Pengiriman', r?.status === 'selesai' ? 'Tiba di Tujuan' : r?.awb ? 'Dalam Perjalanan' : 'Menunggu Kurir'],
+                    ['Status Pengiriman', isDelivered ? 'Paket Telah Diterima' : heroIsTransit ? 'Dalam Perjalanan' : 'Disiapkan Logistik'],
                   ],
                   footerNote: 'Bukti pembayaran sah layanan pengiriman barang temuan LoFound KAI Commuter.',
                 })
@@ -593,9 +716,13 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
               Unduh Resi Bayar PDF
             </Button>
           </section>
+
           <section className="rounded-[20px] border border-line bg-white p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-muted">Nomor Resi Kurir • {r?.shippingCourier || courier}</p>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Informasi Pengiriman</p>
+                <p className="truncate text-sm font-bold text-ink">{courierLabel}</p>
+              </div>
               {(r?.biteshipOrderId || r?.biteshipTrackingId) && (
                 <Button
                   variant="ghost"
@@ -616,50 +743,122 @@ export function ShippingScreen({ id, autoSync = false }: { id: string; autoSync?
                     }
                   }}
                 >
-                  Perbarui Lacak
+                  Perbarui
                 </Button>
               )}
             </div>
-            <div className="mt-1 flex items-center gap-2">
-              <p className={cx('min-w-0 flex-1', r?.awb ? 'break-all font-mono text-[15px] font-bold tracking-wide text-ink' : 'text-sm font-semibold text-muted')}>{realAwb}</p>
+
+            <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-field px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-muted">Nomor Resi (AWB)</p>
+                <p className={cx('mt-0.5', r?.awb ? 'break-all font-mono text-sm font-bold tracking-wide text-ink' : 'text-xs font-semibold text-muted')}>
+                  {realAwb}
+                </p>
+              </div>
               {r?.awb && (
-                <Button variant="tint" size="sm" className="shrink-0" icon={Copy} onClick={() => toast('Nomor resi disalin.')}>
+                <Button
+                  variant="tint"
+                  size="sm"
+                  className="shrink-0"
+                  icon={Copy}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(r.awb!)
+                    toast('Nomor resi disalin.')
+                  }}
+                >
                   Salin
                 </Button>
               )}
             </div>
-            <ol className="mt-4 flex flex-col gap-3">
-              {['Menunggu dijemput kurir', 'Dalam perjalanan', 'Tiba'].map((st, i) => (
-                <li key={st} className="flex items-center gap-3">
-                  <span className={cx('flex size-6 items-center justify-center rounded-full border-2', i < pkgStep ? 'border-success bg-success text-white' : i === pkgStep ? 'border-primary' : 'border-[#c4d3db]')}>
-                    {i < pkgStep ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : i === pkgStep ? <span className="size-2.5 rounded-full bg-primary" /> : null}
-                  </span>
-                  <span className={cx('flex-1 text-sm', i <= pkgStep ? 'font-bold text-ink' : 'text-muted')}>{st}</span>
-                  {i === pkgStep && <Badge tone="info">Saat ini</Badge>}
-                </li>
-              ))}
-            </ol>
-            {r?.trackingHistory && r.trackingHistory.length > 0 && (
-              <div className="mt-4 border-t border-line pt-3">
-                <p className="mb-2 text-xs font-bold text-ink">Riwayat Perjalanan Paket</p>
-                <ul className="flex flex-col gap-2">
-                  {r.trackingHistory.slice(-5).reverse().map((h, idx) => (
-                    <li key={idx} className="flex items-start justify-between gap-2 text-xs">
-                      <span className="text-ink">{h.note || h.status}</span>
-                      {h.updated_at && (
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted">
-                          {new Date(h.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </span>
+
+            {r?.shippingAddress && (
+              <div className="mt-3 flex items-start gap-2 text-xs text-muted">
+                <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                <span className="leading-4 text-ink">{r.shippingAddress}</span>
+              </div>
+            )}
+
+            {/* Shopee-style 4-stage milestone progress bar */}
+            <div className="relative mt-5 grid grid-cols-4 gap-1" aria-label="Progres pengiriman">
+              <div className="absolute left-[12.5%] right-[12.5%] top-3 h-0.5 bg-[#e1e8ed]" aria-hidden />
+              <div
+                className="absolute left-[12.5%] top-3 h-0.5 bg-success transition-all"
+                style={{ width: `${Math.min(100, Math.max(0, (milestoneDoneCount - (isDelivered ? 1 : 0)) / 3) * 75)}%` }}
+                aria-hidden
+              />
+              {['Dikemas', 'Dijemput', 'Dikirim', 'Tiba'].map((label, idx) => {
+                const isDone = idx < milestoneDoneCount
+                const isCurr = idx === milestoneActiveIdx
+                return (
+                  <div key={label} className="relative z-10 flex flex-col items-center gap-1.5 text-center">
+                    <span
+                      className={cx(
+                        'flex size-6 items-center justify-center rounded-full border-2',
+                        isDone
+                          ? 'border-success bg-success text-white'
+                          : isCurr
+                            ? 'border-primary bg-white ring-4 ring-tint'
+                            : 'border-[#c4d3db] bg-white'
                       )}
-                    </li>
-                  ))}
-                </ul>
+                    >
+                      {isDone ? (
+                        <Check className="size-3.5" strokeWidth={3} aria-hidden />
+                      ) : isCurr ? (
+                        <span className="size-2 rounded-full bg-primary" />
+                      ) : null}
+                    </span>
+                    <span className={cx('text-[11px]', isDone || isCurr ? 'font-bold text-ink' : 'font-medium text-muted')}>
+                      {label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Shopee-style vertical shipment timeline */}
+            {r?.trackingHistory && r.trackingHistory.length > 0 && (
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="mb-3 text-xs font-bold text-ink">Riwayat Perjalanan Paket</p>
+                <ol className="relative flex flex-col gap-4 pl-5">
+                  <span aria-hidden className="absolute bottom-2 left-[7px] top-2 w-0.5 bg-[#e3eaef]" />
+                  {[...r.trackingHistory].reverse().map((h, idx) => {
+                    const isLatest = idx === 0
+                    const ev = formatTrackingEvent(h)
+                    return (
+                      <li key={idx} className="relative flex flex-col gap-0.5">
+                        <span
+                          aria-hidden
+                          className={cx(
+                            'absolute -left-5 top-1 size-3.5 rounded-full border-2 border-white',
+                            isLatest ? 'bg-success ring-4 ring-mint' : 'bg-[#cbd7df]'
+                          )}
+                        />
+                        <p className={cx('text-xs font-bold leading-4', isLatest ? 'text-success' : 'text-ink')}>
+                          {ev.title}
+                        </p>
+                        {ev.desc && <p className="text-[11px] leading-4 text-muted">{ev.desc}</p>}
+                        {h.updated_at && (
+                          <p className="text-[11px] tabular-nums text-soft">
+                            {new Date(h.updated_at).toLocaleString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}{' '}
+                            WIB
+                          </p>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ol>
               </div>
             )}
           </section>
         </div>
       </Screen>
     )
+  }
 
   return (
     <Screen

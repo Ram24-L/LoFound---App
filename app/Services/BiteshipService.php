@@ -468,11 +468,14 @@ class BiteshipService
 
             $courierName = trim((string) ($p['courier_name'] ?? strtoupper($company)));
             $serviceName = trim((string) ($p['courier_service_name'] ?? strtoupper($type)));
+            $displayCourier = str_starts_with(strtolower($serviceName), strtolower($courierName))
+                ? $serviceName
+                : "{$courierName} {$serviceName}";
             $eta = $this->formatEta($p);
             $minHours = $this->estimateMinHours($p);
 
             $list[] = [
-                'k'         => "{$courierName} {$serviceName}",
+                'k'         => $displayCourier,
                 'company'   => $company,
                 'type'      => $type,
                 'price'     => $price,
